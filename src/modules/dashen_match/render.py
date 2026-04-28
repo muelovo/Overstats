@@ -846,6 +846,11 @@ def _draw_rank_badge(
     if score <= 0 and not tier:
         return
 
+    badge_image = _build_rank_badge_image(rank_info, width=width, height=height, mode=mode)
+    if badge_image is not None:
+        img.paste(badge_image, (x, y), badge_image)
+        return
+
     rank_label = _rank_label(rank_info, mode=mode)
     if not rank_label:
         return
@@ -866,6 +871,61 @@ def _draw_rank_badge(
         score_text = str(score)
         sw, sh = _text_size(draw, score_text, small_font)
         draw.text((x + width - sw - 5, y + height - sh - 1), score_text, font=small_font, fill=(40, 26, 12, 220))
+
+
+def _build_rank_badge_image(rank_info: Dict[str, Any], *, width: int, height: int, mode: str) -> Any:
+    from PIL import Image, ImageDraw
+
+    score = _safe_int(rank_info.get("rankScore") or rank_info.get("score"))
+    tier = str(rank_info.get("rankSubTier") or rank_info.get("rank_sub_tier") or "").strip()
+    asset_path = _rank_badge_asset_path(score, mode=mode)
+    if asset_path is None or not asset_path.exists():
+        return None
+    try:
+        icon = Image.open(asset_path).convert("RGBA")
+    except Exception:
+        return None
+
+    original_width, original_height = icon.size
+    if tier:
+        draw = ImageDraw.Draw(icon)
+        font = _font_num(max(18, int(original_height * 0.56)))
+        center_x = original_width * (332 / max(1, 460))
+        center_y = original_height * (52 / max(1, 156))
+        try:
+            box = draw.textbbox((0, 0), tier, font=font)
+            draw_x = center_x - (box[2] - box[0]) / 2 - box[0]
+            draw_y = center_y - (box[3] - box[1]) / 2 - box[1]
+            draw.text((draw_x, draw_y), tier, font=font, fill=(22, 25, 32, 255))
+        except Exception:
+            try:
+                draw.text((center_x, center_y), tier, font=font, fill=(22, 25, 32, 255), anchor="mm")
+            except TypeError:
+                draw.text((original_width * 0.72, original_height * 0.33), tier, font=font, fill=(22, 25, 32, 255))
+
+    return _resize_image(icon, (width, height))
+
+
+def _rank_badge_asset_path(score: int, *, mode: str) -> Path | None:
+    rank_flat_dir = RESOURCE_DIR / "rank_flat"
+    if score <= 0:
+        return None
+
+    if mode == "fight":
+        level = max(1, min(7, (_safe_int(score) // 100) + 1))
+        fight_path = rank_flat_dir / f"c{level}.png"
+        if fight_path.exists():
+            return fight_path
+        normal_path = rank_flat_dir / f"{level}.png"
+        return normal_path if normal_path.exists() else None
+
+    max_level = 9 if (rank_flat_dir / "9.png").exists() else 8
+    level = max(1, min(max_level, (_safe_int(score) // 100) + 1))
+    normal_path = rank_flat_dir / f"{level}.png"
+    if normal_path.exists():
+        return normal_path
+    fallback_path = rank_flat_dir / f"c{min(level, 7)}.png"
+    return fallback_path if fallback_path.exists() else None
 
 
 def _draw_map_background(img: Any, map_info: Dict[str, Any], y: int) -> None:

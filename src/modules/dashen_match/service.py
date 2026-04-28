@@ -53,9 +53,6 @@ PLAYER_DETAIL_CACHE_TTL = 1800
 PLAYER_DETAIL_CACHE_MAX = 512
 REPLY_CONTEXT_CACHE_TTL = 1800
 REPLY_CONTEXT_CACHE_MAX = 256
-ANALYSIS_GOOGLE_MODEL = "gemini-3.1-flash-lite-preview"
-ANALYSIS_OPENAI_MODEL = "gpt-4o-mini"
-ANALYSIS_DEEPSEEK_MODEL = "deepseek-chat"
 
 _CACHE_LOCK = threading.RLock()
 _PLAYER_TOKEN_CACHE: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
@@ -100,10 +97,10 @@ def _sanitize_api_key(value: Any) -> str:
 def _analysis_model_for_base_url(base_url: str) -> str:
     normalized = str(base_url or "").strip().lower()
     if "generativelanguage.googleapis.com" in normalized or "googleapis.com" in normalized:
-        return ANALYSIS_GOOGLE_MODEL
+        return str(getattr(app_config, "ANALYSIS_GOOGLE_MODEL", "gemini-3.1-flash-lite-preview") or "gemini-3.1-flash-lite-preview")
     if "deepseek" in normalized:
-        return ANALYSIS_DEEPSEEK_MODEL
-    return ANALYSIS_OPENAI_MODEL
+        return str(getattr(app_config, "ANALYSIS_DEEPSEEK_MODEL", "deepseek-chat") or "deepseek-chat")
+    return str(getattr(app_config, "ANALYSIS_OPENAI_MODEL", "gpt-4o-mini") or "gpt-4o-mini")
 
 
 def _resolved_payload(resolved: Optional[BnetSearchResult]) -> Optional[Dict[str, Any]]:

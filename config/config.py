@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-# ======================= 核心服务 ====================== #
+# ======================= Core Service ====================== #
 API_HOST = "127.0.0.1"
 API_PORT = 18080
 USE_STREAM_RESPONSE = True
 
-# ======================= 大神上游配置 ====================== #
-# 至少需要配置一个账号。
+# ======================= Dashen Upstream ====================== #
+# Configure at least one account.
 DASHEN_ACCOUNTS = [
     {
         "name": "account-1",
@@ -35,28 +35,34 @@ DASHEN_USER_AGENT = (
 DASHEN_ACCOUNT_FAILURE_COOLDOWN_SECONDS = 60
 DASHEN_MAX_CONCURRENT_REQUESTS = 2
 
-# 可选代理配置。
+# Optional proxy settings.
 DASHEN_INTERNATIONAL_PROXY = ""
 DASHEN_NETEASE_PROXIES = [
     None,
     # "http://your-netease-proxy:port",
 ]
 
-# 可选的 OW 电竞 API。
+# Optional OW esports API.
 OW_ESPORTS_URL = ""
 OW_ESPORTS_PAYLOAD = {
     "ids": [],
 }
 
-# ======================= 对局分析 ====================== #
-# 兼容 OpenAI 的基础 URL，例如：
+# ======================= Match Analysis ====================== #
+# OpenAI-compatible base URL, for example:
 # - https://api.openai.com/v1
 # - https://api.deepseek.com/v1
 # - https://generativelanguage.googleapis.com/v1beta/openai
-# 也可以直接填写完整的 /chat/completions 接口地址。
+# You can also provide the full /chat/completions endpoint directly.
 ANALYSIS_BASE_URL = ""
 ANALYSIS_API_KEY = "replace-with-your-analysis-api-key"
-# 仅放 AI 锐评的人格/口吻；任务说明与 JSON 模板仍保留在 service.py。
+
+# ANALYSIS_GOOGLE_MODEL = "gemini-3.1-flash-lite-preview"
+# ANALYSIS_OPENAI_MODEL = ""
+ANALYSIS_DEEPSEEK_MODEL = "deepseek-chat"
+
+# Only put AI persona/tone here.
+# Task instructions and the JSON schema remain in service.py.
 ANALYSIS_PERSONA_PROMPT = """
 【核心原则】
 请保持绝对客观中立，拒绝阿谀奉承！不要因为查询指令的是焦点玩家就一味夸奖，如果焦点玩家表现平庸或拉垮请直接批评。
