@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import sys
 import time
-import types
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -115,30 +114,11 @@ def title_for_scope(scope: str) -> str:
     return TITLE_BY_SCOPE[normalized]
 
 
-def _install_hoshino_stub() -> None:
-    if "hoshino.typing" in sys.modules:
-        return
-
-    hoshino_module = sys.modules.get("hoshino") or types.ModuleType("hoshino")
-    typing_module = types.ModuleType("hoshino.typing")
-
-    class MessageSegment:
-        @staticmethod
-        def image(payload: Any) -> Any:
-            return payload
-
-    typing_module.MessageSegment = MessageSegment
-    hoshino_module.typing = typing_module
-    sys.modules.setdefault("hoshino", hoshino_module)
-    sys.modules["hoshino.typing"] = typing_module
-
-
 def _load_runtime() -> SummaryRuntime:
     global _RUNTIME
     if _RUNTIME is not None:
         return _RUNTIME
 
-    _install_hoshino_stub()
     for candidate_root in (PROJECT_ROOT, MIG_ROOT):
         candidate_text = str(candidate_root)
         if candidate_text not in sys.path:

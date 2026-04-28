@@ -59,3 +59,15 @@ register_module(
     "overstats.src.modules.dashen_rank_history",
     "Dashen historical competitive and stadium rank timeline renderer.",
 )
+
+register_module(
+    "dashen_quick_strength",
+    "overstats.src.modules.dashen_quick_strength",
+    "Dashen quick-match strength index data builder and PIL renderer.",
+)
+
+register_module(
+    "dashen_competitive_strength",
+    "overstats.src.modules.dashen_competitive_strength",
+    "Dashen competitive-match strength index data builder and PIL renderer.",
+)

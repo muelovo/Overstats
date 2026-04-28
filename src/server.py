@@ -18,6 +18,11 @@ try:
     from overstats.src.modules.query_tool import ensure_query_tool_assets, load_query_tool
     from overstats.src.modules.dashen_match import DashenMatchQuery, dashen_match_module
     from overstats.src.modules.dashen_rank_history import DashenRankHistoryQuery, dashen_rank_history_module
+    from overstats.src.modules.dashen_quick_strength import DashenQuickStrengthQuery, dashen_quick_strength_module
+    from overstats.src.modules.dashen_competitive_strength import (
+        DashenCompetitiveStrengthQuery,
+        dashen_competitive_strength_module,
+    )
     from overstats.src.modules.dashen_summary import DashenSummaryQuery, dashen_summary_module
 except ModuleNotFoundError:
     from config import APIConfig
@@ -28,6 +33,11 @@ except ModuleNotFoundError:
     from src.modules.query_tool import ensure_query_tool_assets, load_query_tool
     from src.modules.dashen_match import DashenMatchQuery, dashen_match_module
     from src.modules.dashen_rank_history import DashenRankHistoryQuery, dashen_rank_history_module
+    from src.modules.dashen_quick_strength import DashenQuickStrengthQuery, dashen_quick_strength_module
+    from src.modules.dashen_competitive_strength import (
+        DashenCompetitiveStrengthQuery,
+        dashen_competitive_strength_module,
+    )
     from src.modules.dashen_summary import DashenSummaryQuery, dashen_summary_module
 
 
@@ -748,6 +758,172 @@ class OverstatsCoreService:
             )
         return result.image.content
 
+    async def handle_dashen_quick_strength(self, payload: Dict[str, object]) -> Dict[str, object]:
+        return await self.dashen_request_queue.run(
+            "quick_strength",
+            lambda: self._handle_dashen_quick_strength(payload),
+        )
+
+    async def _handle_dashen_quick_strength(self, payload: Dict[str, object]) -> Dict[str, object]:
+        bnet_id = str(payload.get("bnet_id") or payload.get("bnetId") or "").strip()
+        customer_token = str(payload.get("customer_token") or payload.get("customerToken") or "").strip()
+        limit = _coerce_optional_int(payload, "limit") or 12
+        if not bnet_id and not customer_token:
+            raise ModuleError(
+                error="missing_target",
+                message="Missing query target: bnet_id or customer_token is required.",
+                status_code=400,
+                hint='Example: {"bnet_id":"Player#12345"}',
+            )
+
+        result = await dashen_quick_strength_module.query_quick_strength(
+            DashenQuickStrengthQuery(
+                customer_token=customer_token,
+                bnet_id=bnet_id,
+                limit=limit,
+                include_previous_season=_coerce_bool(payload.get("include_previous_season"), True),
+            ),
+            render=False,
+        )
+        resolved = result.resolved_bnet
+        return {
+            "ok": True,
+            "customer_token": result.customer_token,
+            "full_id": result.full_id,
+            "bnet_id": result.bnet_id,
+            "resolved": {
+                "query": resolved.query,
+                "full_id": resolved.full_id,
+                "bnet_id": resolved.bnet_id,
+                "has_customer_token": bool(resolved.customer_token),
+            } if resolved else {
+                "query": bnet_id or customer_token,
+                "full_id": result.full_id,
+                "bnet_id": result.bnet_id,
+                "has_customer_token": bool(result.customer_token),
+            },
+            "summary": result.summary.to_dict(),
+            "matches": [item.to_dict() for item in result.matches],
+        }
+
+    async def handle_dashen_quick_strength_image(self, payload: Dict[str, object]) -> bytes:
+        return await self.dashen_request_queue.run(
+            "quick_strength_image",
+            lambda: self._handle_dashen_quick_strength_image(payload),
+        )
+
+    async def _handle_dashen_quick_strength_image(self, payload: Dict[str, object]) -> bytes:
+        bnet_id = str(payload.get("bnet_id") or payload.get("bnetId") or "").strip()
+        customer_token = str(payload.get("customer_token") or payload.get("customerToken") or "").strip()
+        limit = _coerce_optional_int(payload, "limit") or 12
+        if not bnet_id and not customer_token:
+            raise ModuleError(
+                error="missing_target",
+                message="Missing query target: bnet_id or customer_token is required.",
+                status_code=400,
+                hint='Example: {"bnet_id":"Player#12345"}',
+            )
+
+        result = await dashen_quick_strength_module.query_quick_strength(
+            DashenQuickStrengthQuery(
+                customer_token=customer_token,
+                bnet_id=bnet_id,
+                limit=limit,
+                include_previous_season=_coerce_bool(payload.get("include_previous_season"), True),
+            ),
+            render=True,
+        )
+        if not result.image:
+            raise ModuleError(
+                error="render_failed",
+                message="Dashen quick strength image was not generated.",
+                status_code=500,
+            )
+        return result.image.content
+
+    async def handle_dashen_competitive_strength(self, payload: Dict[str, object]) -> Dict[str, object]:
+        return await self.dashen_request_queue.run(
+            "competitive_strength",
+            lambda: self._handle_dashen_competitive_strength(payload),
+        )
+
+    async def _handle_dashen_competitive_strength(self, payload: Dict[str, object]) -> Dict[str, object]:
+        bnet_id = str(payload.get("bnet_id") or payload.get("bnetId") or "").strip()
+        customer_token = str(payload.get("customer_token") or payload.get("customerToken") or "").strip()
+        limit = _coerce_optional_int(payload, "limit") or 12
+        if not bnet_id and not customer_token:
+            raise ModuleError(
+                error="missing_target",
+                message="Missing query target: bnet_id or customer_token is required.",
+                status_code=400,
+                hint='Example: {"bnet_id":"Player#12345"}',
+            )
+
+        result = await dashen_competitive_strength_module.query_competitive_strength(
+            DashenCompetitiveStrengthQuery(
+                customer_token=customer_token,
+                bnet_id=bnet_id,
+                limit=limit,
+                include_previous_season=_coerce_bool(payload.get("include_previous_season"), True),
+            ),
+            render=False,
+        )
+        resolved = result.resolved_bnet
+        return {
+            "ok": True,
+            "customer_token": result.customer_token,
+            "full_id": result.full_id,
+            "bnet_id": result.bnet_id,
+            "resolved": {
+                "query": resolved.query,
+                "full_id": resolved.full_id,
+                "bnet_id": resolved.bnet_id,
+                "has_customer_token": bool(resolved.customer_token),
+            } if resolved else {
+                "query": bnet_id or customer_token,
+                "full_id": result.full_id,
+                "bnet_id": result.bnet_id,
+                "has_customer_token": bool(result.customer_token),
+            },
+            "summary": result.summary.to_dict(),
+            "matches": [item.to_dict() for item in result.matches],
+        }
+
+    async def handle_dashen_competitive_strength_image(self, payload: Dict[str, object]) -> bytes:
+        return await self.dashen_request_queue.run(
+            "competitive_strength_image",
+            lambda: self._handle_dashen_competitive_strength_image(payload),
+        )
+
+    async def _handle_dashen_competitive_strength_image(self, payload: Dict[str, object]) -> bytes:
+        bnet_id = str(payload.get("bnet_id") or payload.get("bnetId") or "").strip()
+        customer_token = str(payload.get("customer_token") or payload.get("customerToken") or "").strip()
+        limit = _coerce_optional_int(payload, "limit") or 12
+        if not bnet_id and not customer_token:
+            raise ModuleError(
+                error="missing_target",
+                message="Missing query target: bnet_id or customer_token is required.",
+                status_code=400,
+                hint='Example: {"bnet_id":"Player#12345"}',
+            )
+
+        result = await dashen_competitive_strength_module.query_competitive_strength(
+            DashenCompetitiveStrengthQuery(
+                customer_token=customer_token,
+                bnet_id=bnet_id,
+                limit=limit,
+                include_previous_season=_coerce_bool(payload.get("include_previous_season"), True),
+            ),
+            render=True,
+        )
+        if not result.image:
+            raise ModuleError(
+                error="render_failed",
+                message="Dashen competitive strength image was not generated.",
+                status_code=500,
+            )
+        return result.image.content
+
 
 class AsyncRunner:
     def __init__(self) -> None:
@@ -876,6 +1052,22 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
 
             if path == "/api/v2/dashen-rank-history":
                 self._handle_dashen_rank_history_post()
+                return
+
+            if path == "/api/v2/dashen-quick-strength/image":
+                self._handle_dashen_quick_strength_image_post()
+                return
+
+            if path == "/api/v2/dashen-quick-strength":
+                self._handle_dashen_quick_strength_post()
+                return
+
+            if path == "/api/v2/dashen-competitive-strength/image":
+                self._handle_dashen_competitive_strength_image_post()
+                return
+
+            if path == "/api/v2/dashen-competitive-strength":
+                self._handle_dashen_competitive_strength_post()
                 return
 
             if path == "/api/v2/dashen-match/detail/replies":
@@ -1205,6 +1397,186 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
 
             try:
                 image_body = async_runner.run(service.handle_dashen_rank_history_image(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_binary(HTTPStatus.OK, image_body, "image/png")
+
+        def _handle_dashen_quick_strength_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                result = async_runner.run(service.handle_dashen_quick_strength(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_json(HTTPStatus.OK, result)
+
+        def _handle_dashen_quick_strength_image_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                image_body = async_runner.run(service.handle_dashen_quick_strength_image(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_binary(HTTPStatus.OK, image_body, "image/png")
+
+        def _handle_dashen_competitive_strength_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                result = async_runner.run(service.handle_dashen_competitive_strength(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_json(HTTPStatus.OK, result)
+
+        def _handle_dashen_competitive_strength_image_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                image_body = async_runner.run(service.handle_dashen_competitive_strength_image(payload))
             except ModuleError as exc:
                 self._send_json(
                     HTTPStatus(exc.status_code),

@@ -106,6 +106,10 @@ curl http://127.0.0.1:18080/healthz
 - `POST /api/v2/dashen-match/detail/replies`
 - `POST /api/v2/dashen-rank-history`
 - `POST /api/v2/dashen-rank-history/image`
+- `POST /api/v2/dashen-quick-strength`
+- `POST /api/v2/dashen-quick-strength/image`
+- `POST /api/v2/dashen-competitive-strength`
+- `POST /api/v2/dashen-competitive-strength/image`
 - `POST /api/v2/dashen-summary/today`
 - `POST /api/v2/dashen-summary/today/image`
 - `POST /api/v2/dashen-summary/yesterday`
@@ -144,4 +148,3 @@ python -m unittest overstats.test.test_dashen_summary_today
 - 检查日志、截图、测试数据中是否包含敏感标识
 
 `overstats/config/config.py` 是本地运行配置文件，不适合作为公开仓库中的密钥存储位置。
-

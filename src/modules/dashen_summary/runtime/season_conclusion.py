@@ -12,8 +12,6 @@ from collections import Counter, OrderedDict, defaultdict
 from functools import partial
 from io import BytesIO
 from pathlib import Path
-
-from hoshino.typing import MessageSegment
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 from .dashen import (
@@ -148,6 +146,22 @@ async def _run_summary_render_sync(label, func, *args):
 
 async def _summary_png_b64_async(image, label):
     return await _run_summary_render_sync(f"{label}:encode", _summary_png_b64, image)
+
+
+def _format_summary_image_message(image_b64, image_message_formatter=None):
+    if callable(image_message_formatter):
+        return image_message_formatter(image_b64)
+    return image_b64
+
+
+async def _send_summary_image(bot, ev, image_b64, image_message_formatter=None):
+    await bot.send(
+        ev,
+        _format_summary_image_message(
+            image_b64,
+            image_message_formatter=image_message_formatter,
+        ),
+    )
 
 HERO_BY_GUID = {
     str(item.get("heroGuid")): item
@@ -3481,7 +3495,15 @@ def _render_season_image(stats, resolved_target):
     return canvas.convert("RGB")
 
 
-async def render_period_conclusion(bot, ev, resolved_target, matches, title_text, all_matches=None):
+async def render_period_conclusion(
+    bot,
+    ev,
+    resolved_target,
+    matches,
+    title_text,
+    all_matches=None,
+    image_message_formatter=None,
+):
     perf_trace_id = f"{int(time.time())}-{getattr(ev, 'user_id', 'unknown')}"
     perf_started_at = time.perf_counter()
     perf_last_at = perf_started_at
@@ -3555,14 +3577,16 @@ async def render_period_conclusion(bot, ev, resolved_target, matches, title_text
         "ENCODE_DONE",
         extra=f"payload_kb={_base64_payload_kb(image_b64)}; quality={SUMMARY_IMAGE_JPEG_QUALITY}",
     )
-    await bot.send(
+    await _send_summary_image(
+        bot,
         ev,
-        MessageSegment.image(image_b64),
+        image_b64,
+        image_message_formatter=image_message_formatter,
     )
     _period_stage_log("IMAGE_SENT")
 
 
-async def render_season_conclusion(bot, ev, resolved_target):
+async def render_season_conclusion(bot, ev, resolved_target, image_message_formatter=None):
     global _SEASON_SUMMARY_COMMAND_BUSY
 
     if _SEASON_SUMMARY_COMMAND_BUSY:
@@ -3570,12 +3594,22 @@ async def render_season_conclusion(bot, ev, resolved_target):
 
     _SEASON_SUMMARY_COMMAND_BUSY = True
     try:
-        await _render_season_conclusion_locked(bot, ev, resolved_target)
+        await _render_season_conclusion_locked(
+            bot,
+            ev,
+            resolved_target,
+            image_message_formatter=image_message_formatter,
+        )
     finally:
         _SEASON_SUMMARY_COMMAND_BUSY = False
 
 
-async def _render_season_conclusion_locked(bot, ev, resolved_target):
+async def _render_season_conclusion_locked(
+    bot,
+    ev,
+    resolved_target,
+    image_message_formatter=None,
+):
     full_id = resolved_target.get("full_id") or "Unknown Player"
     await bot.send(ev, f"正在生成 {full_id} 的赛季总结图，开始抓取本赛季对局...")
 
@@ -3596,11 +3630,23 @@ async def _render_season_conclusion_locked(bot, ev, resolved_target):
         stats,
         resolved_target,
     )
-    await bot.send(
+    await _send_summary_image(
+        bot,
         ev,
-        MessageSegment.image(await _summary_png_b64_async(image, "season-image")),
+        await _summary_png_b64_async(image, "season-image"),
+        image_message_formatter=image_message_formatter,
     )
 
 
-async def render_season_conclusion_placeholder(bot, ev, resolved_target):
-    await render_season_conclusion(bot, ev, resolved_target)
+async def render_season_conclusion_placeholder(
+    bot,
+    ev,
+    resolved_target,
+    image_message_formatter=None,
+):
+    await render_season_conclusion(
+        bot,
+        ev,
+        resolved_target,
+        image_message_formatter=image_message_formatter,
+    )

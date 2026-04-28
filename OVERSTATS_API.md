@@ -18,6 +18,162 @@
 }
 ```
 
+## Quick Strength API
+
+Endpoints:
+
+- `POST /api/v2/dashen-quick-strength`
+- `POST /api/v2/dashen-quick-strength/image`
+
+Request body:
+
+```json
+{
+  "bnet_id": "Player#12345",
+  "limit": 12,
+  "include_previous_season": true
+}
+```
+
+You may provide `customer_token` instead of `bnet_id`. `limit` is clamped to `3-12`.
+
+JSON response shape:
+
+```json
+{
+  "ok": true,
+  "customer_token": "...",
+  "full_id": "Player#12345",
+  "bnet_id": "123456",
+  "resolved": {
+    "query": "Player#12345",
+    "full_id": "Player#12345",
+    "bnet_id": "123456",
+    "has_customer_token": true
+  },
+  "summary": {
+    "match_count": 12,
+    "overall_avg_score": 2875.4,
+    "overall_avg_rank": "Platinum 2",
+    "score_range": {
+      "min": 2410,
+      "max": 3310
+    },
+    "used_previous_season_fallback": false
+  },
+  "matches": [
+    {
+      "match_id": "uuid",
+      "begin_ts": 1777098388787,
+      "result": 1,
+      "map_guid": "map-guid",
+      "avg_score": 2920.0,
+      "avg_rank": "Platinum 1",
+      "role_range": {
+        "min": 2510,
+        "max": 3350
+      },
+      "all_role_range": {
+        "min": 2320,
+        "max": 3470
+      },
+      "current_role_range": {
+        "min": 2550,
+        "max": 3220
+      },
+      "current_all_role_range": {
+        "min": 2410,
+        "max": 3340
+      },
+      "team_scores": [3010, 2890, 2760],
+      "enemy_scores": [2940, 2810, 2670],
+      "team_streak_avg": 1.2,
+      "enemy_streak_avg": -0.4
+    }
+  ]
+}
+```
+
+The `/image` endpoint returns `image/png` rendered with Pillow instead of matplotlib.
+
+## Competitive Strength API
+
+Endpoints:
+
+- `POST /api/v2/dashen-competitive-strength`
+- `POST /api/v2/dashen-competitive-strength/image`
+
+Request body:
+
+```json
+{
+  "bnet_id": "Player#12345",
+  "limit": 12,
+  "include_previous_season": true
+}
+```
+
+You may provide `customer_token` instead of `bnet_id`. `limit` is clamped to `3-12`.
+
+JSON response shape:
+
+```json
+{
+  "ok": true,
+  "customer_token": "...",
+  "full_id": "Player#12345",
+  "bnet_id": "123456",
+  "resolved": {
+    "query": "Player#12345",
+    "full_id": "Player#12345",
+    "bnet_id": "123456",
+    "has_customer_token": true
+  },
+  "summary": {
+    "match_count": 12,
+    "overall_avg_score": 3322.9,
+    "overall_avg_rank": "Diamond 2",
+    "score_range": {
+      "min": 3138,
+      "max": 3657
+    },
+    "used_previous_season_fallback": false
+  },
+  "matches": [
+    {
+      "match_id": "uuid",
+      "begin_ts": 1777098388787,
+      "result": 1,
+      "map_guid": "map-guid",
+      "avg_score": 3410.0,
+      "avg_rank": "Diamond 1",
+      "role_range": {
+        "min": 3250,
+        "max": 3550
+      },
+      "all_role_range": {
+        "min": 3180,
+        "max": 3680
+      },
+      "current_role_range": {
+        "min": 3250,
+        "max": 3550
+      },
+      "current_all_role_range": {
+        "min": 3180,
+        "max": 3680
+      },
+      "team_scores": [3450, 3380, 3320],
+      "enemy_scores": [3550, 3410, 3250],
+      "team_streak_avg": 0.0,
+      "enemy_streak_avg": 0.0
+    }
+  ]
+}
+```
+
+The `/image` endpoint returns `image/png` rendered with the same PIL layout as quick strength, using the competitive rose-red theme.
+
 ## 通用约定
 
 - 除图片接口外，返回 `application/json; charset=utf-8`
