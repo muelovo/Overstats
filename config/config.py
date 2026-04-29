@@ -48,6 +48,9 @@ OW_ESPORTS_PAYLOAD = {
     "ids": [],
 }
 
+# ======================= OW Hero Leaderboard ====================== #
+OW_HERO_LEADERBOARD_CN_SEASON = 2
+
 # ======================= Match Analysis ====================== #
 # OpenAI-compatible base URL, for example:
 # - https://api.openai.com/v1

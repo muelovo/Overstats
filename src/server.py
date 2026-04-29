@@ -25,6 +25,7 @@ try:
     )
     from overstats.src.modules.dashen_summary import DashenSummaryQuery, dashen_summary_module
     from overstats.src.modules.ow_shop import ow_shop_module
+    from overstats.src.modules.ow_hero_leaderboard import OWHeroLeaderboardSyncService
     from overstats.src.modules.patch_notes import patch_notes_module
 except ModuleNotFoundError:
     from config import APIConfig
@@ -42,6 +43,7 @@ except ModuleNotFoundError:
     )
     from src.modules.dashen_summary import DashenSummaryQuery, dashen_summary_module
     from src.modules.ow_shop import ow_shop_module
+    from src.modules.ow_hero_leaderboard import OWHeroLeaderboardSyncService
     from src.modules.patch_notes import patch_notes_module
 
 
@@ -1016,6 +1018,8 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
     async_runner = AsyncRunner()
     request_metrics_recorder = RequestMetricsRecorder()
     async_runner.run(request_metrics_recorder.start())
+    ow_hero_leaderboard_sync_service = OWHeroLeaderboardSyncService()
+    async_runner.run(ow_hero_leaderboard_sync_service.start())
     previous_request_metrics_recorder = dashen_api_client.request_metrics_recorder
     dashen_api_client.request_metrics_recorder = request_metrics_recorder
 
@@ -2229,9 +2233,11 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
 
     def server_close() -> None:
         dashen_api_client.request_metrics_recorder = previous_request_metrics_recorder
+        async_runner.run(ow_hero_leaderboard_sync_service.close())
         async_runner.run(request_metrics_recorder.close())
         async_runner.close()
         original_server_close()
 
     server.server_close = server_close
+    server.ow_hero_leaderboard_sync_service = ow_hero_leaderboard_sync_service
     return server
