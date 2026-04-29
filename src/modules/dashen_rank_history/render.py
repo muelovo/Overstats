@@ -6,6 +6,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
 try:
+    from overstats.src.constants.backgrounds import build_random_map_background
+except ModuleNotFoundError:
+    from src.constants.backgrounds import build_random_map_background
+
+try:
     from overstats.src.modules.query_tool import get_cached_asset_path, load_query_tool
 except ModuleNotFoundError:
     from src.modules.query_tool import get_cached_asset_path, load_query_tool
@@ -389,7 +394,20 @@ def _decorate_with_header(base_image: Any, *, player_name: str, subtitle: str) -
 def _load_background(width: int, height: int, *, rows: int) -> Any:
     from PIL import Image
 
+    map_background = build_random_map_background(
+        (width, height),
+        blur_radius=18,
+        overlay=(17, 26, 43, 138),
+        brightness=0.8,
+        color=0.9,
+    )
+    if map_background is not None:
+        return map_background
+
     background = _load_local_rgba(SEASON_LOGO_DIR / "bg.png")
+    if background is None:
+        alternate_bg = Path(__file__).resolve().parents[3] / "res" / "season_logo" / "bg.png"
+        background = _load_local_rgba(alternate_bg)
     if background is None:
         return Image.new("RGBA", (width, height), (24, 34, 56, 255))
 

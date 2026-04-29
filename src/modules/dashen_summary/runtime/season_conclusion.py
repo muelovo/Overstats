@@ -14,6 +14,8 @@ from io import BytesIO
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
+from ....constants.backgrounds import build_random_map_background
+
 from .dashen import (
     dashen_api_client,
     ds_get_single_fight_match,
@@ -1835,6 +1837,15 @@ def _draw_top_rows(draw, rows, x, y, w, row_h, label_func, value_func, ratio_fun
 
 def _make_background(size):
     w, h = size
+    bg = build_random_map_background(
+        size,
+        blur_radius=24,
+        overlay=(5, 8, 14, 158),
+        brightness=0.78,
+        color=0.88,
+    )
+    if bg is not None:
+        return bg
     bg = Image.new("RGBA", size, (9, 13, 19, 255))
     bg_path = os.path.join(MODULE_DIR, "bg.png")
     if os.path.exists(bg_path):
@@ -1854,16 +1865,15 @@ def _make_blurred_summary_background(source_image, size, blur_radius=50, overlay
 
 
 async def _make_period_background(size, matches):
-    map_urls = [
-        _map_icon_url(match.get("mapGuid"))
-        for match in (matches or [])
-        if match.get("mapGuid") and _map_icon_url(match.get("mapGuid"))
-    ]
-    random.shuffle(map_urls)
-    for map_url in map_urls[:3]:
-        image = await _load_summary_image(map_url)
-        if image:
-            return _make_blurred_summary_background(image, size, blur_radius=50, overlay=(5, 8, 14, 166))
+    background = build_random_map_background(
+        size,
+        blur_radius=50,
+        overlay=(5, 8, 14, 166),
+        brightness=0.78,
+        color=0.86,
+    )
+    if background is not None:
+        return background
     return _make_background(size)
 
 

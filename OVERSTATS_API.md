@@ -61,6 +61,70 @@ JSON response shape:
 
 The `/image` endpoint returns `image/png` rendered in the same overshop-style card layout used by the legacy bot module.
 
+## Patch Notes API
+
+Endpoints:
+
+- `POST /api/v2/patch-notes`
+- `POST /api/v2/patch-notes/image`
+
+Request body:
+
+```json
+{}
+```
+
+Optional request fields:
+
+```json
+{
+  "patch_kind": "latest"
+}
+```
+
+`patch_kind` also accepts `small` or `big`, and `kind` is supported as a compatibility alias.
+
+JSON response shape:
+
+```json
+{
+  "ok": true,
+  "requested_kind": "latest",
+  "selected_kind": "latest",
+  "source": "en",
+  "source_name": "外服",
+  "translated": true,
+  "summary": "国服最新：2026-04-17\n外服最新：2026-04-18",
+  "selected": {
+    "title": "April 18, 2026 Retail Patch",
+    "section_title": "Hero Updates",
+    "date_text": "April 18, 2026",
+    "date": "2026-04-18",
+    "bucket": "small",
+    "bucket_name": "小更新",
+    "text": "Patch body",
+    "sections": [],
+    "hero_updates": []
+  },
+  "sources": {
+    "cn": {
+      "source_name": "国服",
+      "latest": "2026-04-17",
+      "small": "2026-04-17",
+      "big": "2026-04-01"
+    },
+    "en": {
+      "source_name": "外服",
+      "latest": "2026-04-18",
+      "small": "2026-04-18",
+      "big": "2026-04-10"
+    }
+  }
+}
+```
+
+The `/image` endpoint returns `image/png` rendered in the same dark patch-note card style as the legacy overshop patch note output. External-source translation follows the configured `ANALYSIS_*` model settings, and only translated external renders are persisted under `cache/patch_notes/`.
+
 ## Quick Strength API
 
 Endpoints:

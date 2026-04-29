@@ -61,6 +61,10 @@ ANALYSIS_API_KEY = "replace-with-your-analysis-api-key"
 # ANALYSIS_OPENAI_MODEL = ""
 ANALYSIS_DEEPSEEK_MODEL = "deepseek-chat"
 
+# Optional external patch-note fetch proxy.
+PATCH_NOTES_USE_INTERNATIONAL_PROXY = False
+PATCH_NOTES_INTERNATIONAL_PROXY = ""
+
 # Only put AI persona/tone here.
 # Task instructions and the JSON schema remain in service.py.
 ANALYSIS_PERSONA_PROMPT = """

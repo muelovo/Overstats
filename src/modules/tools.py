@@ -77,3 +77,9 @@ register_module(
     "overstats.src.modules.ow_shop",
     "Overwatch shop fetcher, cache manager, and PIL renderer.",
 )
+
+register_module(
+    "patch_notes",
+    "overstats.src.modules.patch_notes",
+    "Overwatch patch notes fetcher, translator, cache manager, and PIL renderer.",
+)

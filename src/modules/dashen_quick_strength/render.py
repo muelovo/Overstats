@@ -6,6 +6,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from ...constants.backgrounds import build_random_map_background
+
 from .engine import score_to_rank
 
 try:
@@ -161,14 +163,25 @@ def _resolve_theme(theme: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 def _draw_background(canvas: Any, *, scale: int) -> None:
     from PIL import Image, ImageFilter
 
+    map_background = build_random_map_background(
+        canvas.size,
+        blur_radius=18 * scale,
+        overlay=(9, 14, 23, 92),
+        brightness=0.76,
+        color=0.86,
+    )
+    if map_background is not None:
+        canvas.alpha_composite(map_background)
+
     overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     draw = _new_draw(overlay)
+    gradient_alpha = 112 if map_background is not None else 255
     for idx in range(canvas.height):
         ratio = idx / max(canvas.height - 1, 1)
         red = int(8 + (22 - 8) * ratio)
         green = int(14 + (24 - 14) * ratio)
         blue = int(25 + (40 - 25) * ratio)
-        draw.line((0, idx, canvas.width, idx), fill=(red, green, blue, 255))
+        draw.line((0, idx, canvas.width, idx), fill=(red, green, blue, gradient_alpha))
 
     glow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     glow_draw = _new_draw(glow)
