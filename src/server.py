@@ -24,6 +24,7 @@ try:
         dashen_competitive_strength_module,
     )
     from overstats.src.modules.dashen_summary import DashenSummaryQuery, dashen_summary_module
+    from overstats.src.modules.ow_shop import ow_shop_module
 except ModuleNotFoundError:
     from config import APIConfig
     from src.client.apiclient import dashen_api_client
@@ -39,6 +40,7 @@ except ModuleNotFoundError:
         dashen_competitive_strength_module,
     )
     from src.modules.dashen_summary import DashenSummaryQuery, dashen_summary_module
+    from src.modules.ow_shop import ow_shop_module
 
 
 def _coerce_bool(value: object, default: bool) -> bool:
@@ -282,6 +284,20 @@ class OverstatsCoreService:
                 "ok": True,
             },
         }
+
+    async def handle_ow_shop(self, payload: Dict[str, object]) -> Dict[str, object]:
+        result = await ow_shop_module.query_shop(render=False)
+        return result.to_dict()
+
+    async def handle_ow_shop_image(self, payload: Dict[str, object]) -> bytes:
+        result = await ow_shop_module.query_shop(render=True)
+        if not result.image:
+            raise ModuleError(
+                error="render_failed",
+                message="OW shop image was not generated.",
+                status_code=500,
+            )
+        return result.image.content
 
     async def handle_dashen_match(self, payload: Dict[str, object]) -> Dict[str, object]:
         return await self.dashen_request_queue.run(
@@ -1014,6 +1030,14 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
         def do_POST(self) -> None:
             path = self._request_path()
             self._set_metrics_context(path if path.startswith("/api/v2/") else None)
+            if path == "/api/v2/ow-shop/image":
+                self._handle_ow_shop_image_post()
+                return
+
+            if path == "/api/v2/ow-shop":
+                self._handle_ow_shop_post()
+                return
+
             if path == "/api/v2/dashen-summary/week/image":
                 self._handle_dashen_summary_image_post("week")
                 return
@@ -1244,6 +1268,96 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
                 return
 
             self._send_json(HTTPStatus.OK, result)
+
+        def _handle_ow_shop_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                result = async_runner.run(service.handle_ow_shop(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_json(HTTPStatus.OK, result)
+
+        def _handle_ow_shop_image_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                image_body = async_runner.run(service.handle_ow_shop_image(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_binary(HTTPStatus.OK, image_body, "image/png")
 
         def _handle_dashen_profile_post(self) -> None:
             try:

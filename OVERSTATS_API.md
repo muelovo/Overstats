@@ -18,6 +18,49 @@
 }
 ```
 
+## OW Shop API
+
+Endpoints:
+
+- `POST /api/v2/ow-shop`
+- `POST /api/v2/ow-shop/image`
+
+Request body:
+
+```json
+{}
+```
+
+JSON response shape:
+
+```json
+{
+  "ok": true,
+  "generated_at": "2026-04-29 12:34:56",
+  "cache_ttl_seconds": 900,
+  "sections": [
+    {
+      "title": "精选商品",
+      "expires_text": "5天3小时12分",
+      "item_count": 3,
+      "items": [
+        {
+          "title": "礼包名称",
+          "description": "传奇 | 礼包（10件物品）",
+          "product_ids": [123, 456],
+          "price_raw": 1900,
+          "price_currency": "XWC",
+          "price_discount_percentage": 50,
+          "image_url": "https://catalog.blzstatic.cn/example.png"
+        }
+      ]
+    }
+  ]
+}
+```
+
+The `/image` endpoint returns `image/png` rendered in the same overshop-style card layout used by the legacy bot module.
+
 ## Quick Strength API
 
 Endpoints:

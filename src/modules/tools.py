@@ -71,3 +71,9 @@ register_module(
     "overstats.src.modules.dashen_competitive_strength",
     "Dashen competitive-match strength index data builder and PIL renderer.",
 )
+
+register_module(
+    "ow_shop",
+    "overstats.src.modules.ow_shop",
+    "Overwatch shop fetcher, cache manager, and PIL renderer.",
+)
