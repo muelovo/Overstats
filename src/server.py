@@ -27,6 +27,7 @@ try:
     from overstats.src.modules.ow_shop import ow_shop_module
     from overstats.src.modules.ow_hero_leaderboard import OWHeroLeaderboardSyncService
     from overstats.src.modules.patch_notes import patch_notes_module
+    from overstats.src.http_server import resolve_http_ui_asset
 except ModuleNotFoundError:
     from config import APIConfig
     from src.client.apiclient import dashen_api_client
@@ -45,6 +46,7 @@ except ModuleNotFoundError:
     from src.modules.ow_shop import ow_shop_module
     from src.modules.ow_hero_leaderboard import OWHeroLeaderboardSyncService
     from src.modules.patch_notes import patch_notes_module
+    from src.http_server import resolve_http_ui_asset
 
 
 def _coerce_bool(value: object, default: bool) -> bool:
@@ -1045,6 +1047,12 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
                     },
                 )
                 return
+
+            ui_asset = resolve_http_ui_asset(path)
+            if ui_asset is not None:
+                self._send_binary(ui_asset.status, ui_asset.body, ui_asset.content_type)
+                return
+
             self._send_json(
                 HTTPStatus.NOT_FOUND,
                 {

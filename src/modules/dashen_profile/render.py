@@ -8,11 +8,6 @@ import time
 from typing import Any, Dict, Sequence
 
 try:
-    from overstats.src.constants.backgrounds import build_random_map_background
-except ModuleNotFoundError:
-    from src.constants.backgrounds import build_random_map_background
-
-try:
     from overstats.src.modules.query_tool import get_cached_asset_path, load_query_tool
 except ModuleNotFoundError:
     from src.modules.query_tool import get_cached_asset_path, load_query_tool
@@ -1156,16 +1151,6 @@ def _draw_avatar(image: Any, avatar_bytes: bytes | None, pos: tuple[int, int], s
 
 def _load_background() -> Any:
     from PIL import Image
-
-    background = build_random_map_background(
-        (2560, 1300),
-        blur_radius=14,
-        overlay=(242, 246, 251, 150),
-        brightness=0.98,
-        color=0.72,
-    )
-    if background is not None:
-        return background
 
     fallback_paths = [
         RESOURCE_DIR / "profilebg.png",

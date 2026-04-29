@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from io import BytesIO
 from pathlib import Path
 import sys
@@ -17,12 +18,14 @@ try:
     from overstats.src.constants import backgrounds as backgrounds_module
     from overstats.src.modules.ow_shop.render import render_ow_shop
     from overstats.src.modules.ow_shop.requests import OWShopItem, OWShopSection
+    import overstats.src.modules.dashen_profile.render as dashen_profile_render_module
     import overstats.src.modules.ow_shop.render as ow_shop_render_module
     import overstats.src.modules.patch_notes.render as patch_notes_render_module
 except ModuleNotFoundError:
     from src.constants import backgrounds as backgrounds_module
     from src.modules.ow_shop.render import render_ow_shop
     from src.modules.ow_shop.requests import OWShopItem, OWShopSection
+    import src.modules.dashen_profile.render as dashen_profile_render_module
     import src.modules.ow_shop.render as ow_shop_render_module
     import src.modules.patch_notes.render as patch_notes_render_module
 
@@ -67,6 +70,10 @@ class BackgroundHelperTests(unittest.TestCase):
 
 @unittest.skipIf(Image is None, "Pillow not installed")
 class ModuleBackgroundPreferenceTests(unittest.TestCase):
+    def test_dashen_profile_background_is_fixed(self) -> None:
+        source = inspect.getsource(dashen_profile_render_module._load_background)
+        self.assertNotIn("build_random_map_background", source)
+
     def test_ow_shop_render_uses_shared_map_background_when_available(self) -> None:
         original_builder = ow_shop_render_module.build_random_map_background
         marker_color = (123, 45, 67, 255)
