@@ -48,6 +48,12 @@ register_module(
 )
 
 register_module(
+    "dashen_sameplay",
+    "overstats.src.modules.dashen_sameplay",
+    "Shared-match lookup between two players, with list and detail orchestration.",
+)
+
+register_module(
     "dashen_profile",
     "overstats.src.modules.dashen_profile",
     "Dashen profile card plus sport and leisure count data orchestration.",

@@ -41,6 +41,26 @@ curl.exe -X POST "http://127.0.0.1:18080/api/v2/dashen-match/detail/replies" ^
   -d "{\"bnet_id\":\"oL1ama#5684\",\"index\":0,\"show_all_heroes\":true,\"analyze\":true}" ^
   --output dashen-match-detail-analysis.json
 
+curl.exe -X POST "http://127.0.0.1:18080/api/v2/dashen-sameplay" ^
+  -H "Content-Type: application/json; charset=utf-8" ^
+  -d "{\"player1_bnet_id\":\"Alpha#1111\",\"player2_bnet_id\":\"Bravo#2222\",\"limit\":20}" ^
+  --output dashen-sameplay.json
+
+curl.exe -X POST "http://127.0.0.1:18080/api/v2/dashen-sameplay/replies" ^
+  -H "Content-Type: application/json; charset=utf-8" ^
+  -d "{\"player1_bnet_id\":\"Alpha#1111\",\"player2_bnet_id\":\"Bravo#2222\",\"limit\":20}" ^
+  --output dashen-sameplay-replies.json
+
+curl.exe -X POST "http://127.0.0.1:18080/api/v2/dashen-sameplay/detail/replies" ^
+  -H "Content-Type: application/json; charset=utf-8" ^
+  -d "{\"player1_bnet_id\":\"Alpha#1111\",\"player2_bnet_id\":\"Bravo#2222\",\"index\":0}" ^
+  --output dashen-sameplay-detail-replies.json
+
+curl.exe -X POST "http://127.0.0.1:18080/api/v2/dashen-sameplay/detail/replies" ^
+  -H "Content-Type: application/json; charset=utf-8" ^
+  -d "{\"player1_bnet_id\":\"Alpha#1111\",\"player2_bnet_id\":\"Bravo#2222\",\"index\":0,\"show_all_heroes\":true,\"analyze\":true}" ^
+  --output dashen-sameplay-detail-analysis.json
+
 curl.exe -X POST "http://127.0.0.1:18080/api/v2/dashen-summary/today" ^
   -H "Content-Type: application/json; charset=utf-8" ^
   -d "{\"bnet_id\":\"oL1ama#5684\"}" ^

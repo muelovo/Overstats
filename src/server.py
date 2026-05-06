@@ -17,6 +17,7 @@ try:
     from overstats.src.modules.dashen_profile import DashenProfileQuery, dashen_profile_module
     from overstats.src.modules.query_tool import ensure_query_tool_assets, load_query_tool
     from overstats.src.modules.dashen_match import DashenMatchQuery, dashen_match_module
+    from overstats.src.modules.dashen_sameplay import DashenSameplayQuery, dashen_sameplay_module
     from overstats.src.modules.dashen_rank_history import DashenRankHistoryQuery, dashen_rank_history_module
     from overstats.src.modules.dashen_quick_strength import DashenQuickStrengthQuery, dashen_quick_strength_module
     from overstats.src.modules.dashen_competitive_strength import (
@@ -41,6 +42,7 @@ except ModuleNotFoundError:
     from src.modules.dashen_profile import DashenProfileQuery, dashen_profile_module
     from src.modules.query_tool import ensure_query_tool_assets, load_query_tool
     from src.modules.dashen_match import DashenMatchQuery, dashen_match_module
+    from src.modules.dashen_sameplay import DashenSameplayQuery, dashen_sameplay_module
     from src.modules.dashen_rank_history import DashenRankHistoryQuery, dashen_rank_history_module
     from src.modules.dashen_quick_strength import DashenQuickStrengthQuery, dashen_quick_strength_module
     from src.modules.dashen_competitive_strength import (
@@ -111,12 +113,45 @@ def _build_ow_hero_pick_rate_query(payload: Dict[str, object]) -> OWHeroPickRate
     )
 
 
+def _build_dashen_sameplay_query(payload: Dict[str, object]) -> DashenSameplayQuery:
+    limit = _coerce_optional_int(payload, "limit")
+    if limit is None:
+        limit = 20
+    return DashenSameplayQuery(
+        player1_bnet_id=str(payload.get("player1_bnet_id") or payload.get("player1BnetId") or "").strip(),
+        player1_customer_token=str(payload.get("player1_customer_token") or payload.get("player1CustomerToken") or "").strip(),
+        player2_bnet_id=str(payload.get("player2_bnet_id") or payload.get("player2BnetId") or "").strip(),
+        player2_customer_token=str(payload.get("player2_customer_token") or payload.get("player2CustomerToken") or "").strip(),
+        include_previous_season=_coerce_bool(payload.get("include_previous_season"), True),
+        limit=limit,
+    )
+
+
+def _validate_dashen_sameplay_query(query: DashenSameplayQuery) -> None:
+    if not (query.player1_bnet_id or query.player1_customer_token):
+        raise ModuleError(
+            error="missing_player1_target",
+            message="player1_bnet_id or player1_customer_token is required.",
+            status_code=400,
+            hint='Example: {"player1_bnet_id":"PlayerA#12345","player2_bnet_id":"PlayerB#67890"}',
+        )
+    if not (query.player2_bnet_id or query.player2_customer_token):
+        raise ModuleError(
+            error="missing_player2_target",
+            message="player2_bnet_id or player2_customer_token is required.",
+            status_code=400,
+            hint='Example: {"player1_bnet_id":"PlayerA#12345","player2_bnet_id":"PlayerB#67890"}',
+        )
+
+
 _T = TypeVar("_T")
 
 
 class DashenRequestQueue:
-    def __init__(self, max_concurrent_requests: int) -> None:
+    def __init__(self, max_concurrent_requests: int, max_accepted_requests: Optional[int] = None) -> None:
         self.max_concurrent_requests = max(1, int(max_concurrent_requests or 1))
+        accepted_limit = self.max_concurrent_requests if max_accepted_requests is None else int(max_accepted_requests)
+        self.max_accepted_requests = max(1, accepted_limit)
         self._semaphore: Optional[asyncio.Semaphore] = None
         self._active_requests = 0
         self._queued_requests = 0
@@ -126,7 +161,30 @@ class DashenRequestQueue:
             self._semaphore = asyncio.Semaphore(self.max_concurrent_requests)
         return self._semaphore
 
+    def _pending_requests(self) -> int:
+        return self._active_requests + self._queued_requests
+
     async def run(self, label: str, factory: Callable[[], Awaitable[_T]]) -> _T:
+        pending_requests = self._pending_requests()
+        if pending_requests >= self.max_accepted_requests:
+            print(
+                "[overstats] dashen request rejected "
+                f"label={label} pending={pending_requests} active={self._active_requests} "
+                f"queued={self._queued_requests} max_accepted={self.max_accepted_requests}"
+            )
+            raise ModuleError(
+                error="too_many_requests",
+                message="Too many requests. Please retry later.",
+                status_code=429,
+                details={
+                    "label": label,
+                    "active_requests": self._active_requests,
+                    "queued_requests": self._queued_requests,
+                    "pending_requests": pending_requests,
+                    "max_accepted_requests": self.max_accepted_requests,
+                },
+            )
+
         semaphore = self._get_semaphore()
         self._queued_requests += 1
         try:
@@ -150,8 +208,15 @@ class DashenRequestQueue:
 class OverstatsCoreService:
     """Core request facade used by every downstream client."""
 
-    def __init__(self, dashen_max_concurrent_requests: int = 2) -> None:
-        self.dashen_request_queue = DashenRequestQueue(dashen_max_concurrent_requests)
+    def __init__(
+        self,
+        dashen_max_concurrent_requests: int = 2,
+        dashen_max_accepted_requests: Optional[int] = None,
+    ) -> None:
+        self.dashen_request_queue = DashenRequestQueue(
+            dashen_max_concurrent_requests,
+            max_accepted_requests=dashen_max_accepted_requests,
+        )
 
     async def handle_dashen_profile(self, payload: Dict[str, object]) -> Dict[str, object]:
         return await self.dashen_request_queue.run(
@@ -517,6 +582,214 @@ class OverstatsCoreService:
                 status_code=500,
             )
         return result.image.content
+
+    async def handle_dashen_sameplay(self, payload: Dict[str, object]) -> Dict[str, object]:
+        return await self.dashen_request_queue.run(
+            "sameplay_list",
+            lambda: self._handle_dashen_sameplay(payload),
+        )
+
+    async def handle_dashen_sameplay_replies(self, payload: Dict[str, object]) -> Dict[str, object]:
+        return await self.dashen_request_queue.run(
+            "sameplay_replies",
+            lambda: self._handle_dashen_sameplay_replies(payload),
+        )
+
+    async def handle_dashen_sameplay_image(self, payload: Dict[str, object]) -> bytes:
+        return await self.dashen_request_queue.run(
+            "sameplay_image",
+            lambda: self._handle_dashen_sameplay_image(payload),
+        )
+
+    async def handle_dashen_sameplay_detail(self, payload: Dict[str, object]) -> Dict[str, object]:
+        return await self.dashen_request_queue.run(
+            "sameplay_detail",
+            lambda: self._handle_dashen_sameplay_detail(payload),
+        )
+
+    async def handle_dashen_sameplay_detail_replies(self, payload: Dict[str, object]) -> Dict[str, object]:
+        return await self.dashen_request_queue.run(
+            "sameplay_detail_replies",
+            lambda: self._handle_dashen_sameplay_detail_replies(payload),
+        )
+
+    async def handle_dashen_sameplay_detail_image(self, payload: Dict[str, object]) -> bytes:
+        return await self.dashen_request_queue.run(
+            "sameplay_detail_image",
+            lambda: self._handle_dashen_sameplay_detail_image(payload),
+        )
+
+    async def _handle_dashen_sameplay(self, payload: Dict[str, object]) -> Dict[str, object]:
+        query = _build_dashen_sameplay_query(payload)
+        _validate_dashen_sameplay_query(query)
+        result = await dashen_sameplay_module.query_sameplay_list(query, render=False)
+        return {
+            "ok": True,
+            "players": {
+                "resolved": {
+                    "player1": result.player1.to_dict(),
+                    "player2": result.player2.to_dict(),
+                }
+            },
+            "customer_tokens": {
+                "player1": result.player1.customer_token,
+                "player2": result.player2.customer_token,
+            },
+            "summary": dict(result.summary),
+            "matches": result.matches,
+        }
+
+    async def _handle_dashen_sameplay_replies(self, payload: Dict[str, object]) -> Dict[str, object]:
+        query = _build_dashen_sameplay_query(payload)
+        _validate_dashen_sameplay_query(query)
+        result = await dashen_sameplay_module.query_sameplay_list_replies(query)
+        return {
+            "ok": True,
+            "players": {
+                "resolved": {
+                    "player1": result.player1.to_dict(),
+                    "player2": result.player2.to_dict(),
+                }
+            },
+            "customer_tokens": {
+                "player1": result.player1.customer_token,
+                "player2": result.player2.customer_token,
+            },
+            "summary": dict(result.summary),
+            "replies": result.replies,
+        }
+
+    async def _handle_dashen_sameplay_image(self, payload: Dict[str, object]) -> bytes:
+        query = _build_dashen_sameplay_query(payload)
+        _validate_dashen_sameplay_query(query)
+        result = await dashen_sameplay_module.query_sameplay_list(query, render=True)
+        if not result.image:
+            raise ModuleError(
+                error="render_failed",
+                message="Dashen sameplay image was not generated.",
+                status_code=500,
+            )
+        return result.image.content
+
+    async def _handle_dashen_sameplay_detail(self, payload: Dict[str, object]) -> Dict[str, object]:
+        query = _build_dashen_sameplay_query(payload)
+        _validate_dashen_sameplay_query(query)
+        index_value = _coerce_optional_int(payload, "index", "idx")
+        match_id = str(payload.get("match_id") or payload.get("matchId") or "").strip()
+        if not match_id and index_value is None:
+            raise ModuleError(
+                error="missing_match_selector",
+                message="index or match_id is required for sameplay detail.",
+                status_code=400,
+                hint='Example: {"player1_bnet_id":"PlayerA#12345","player2_bnet_id":"PlayerB#67890","index":0}',
+            )
+        result = await dashen_sameplay_module.query_sameplay_detail(
+            query,
+            index=index_value,
+            match_id=match_id,
+            show_all_heroes=_coerce_bool(payload.get("show_all_heroes", payload.get("show_all")), False),
+            analyze=_coerce_bool(payload.get("analyze"), False),
+            render=False,
+        )
+        return {
+            "ok": True,
+            "players": {
+                "resolved": {
+                    "player1": result.player1.to_dict(),
+                    "player2": result.player2.to_dict(),
+                }
+            },
+            "customer_tokens": {
+                "player1": result.player1.customer_token,
+                "player2": result.player2.customer_token,
+            },
+            "summary": dict(result.summary),
+            "match_id": result.match_id,
+            "match_kind": result.match_kind,
+            "main_detail_source_player": result.main_detail_source_player,
+            "source_match": result.source_match,
+            "detail": result.detail,
+            "player_details": [
+                {
+                    "player": item.player.to_dict(),
+                    "available": item.available,
+                    "detail": item.detail_payload,
+                    "note": item.note,
+                }
+                for item in result.player_details
+            ],
+            "notes": list(result.notes),
+        }
+
+    async def _handle_dashen_sameplay_detail_replies(self, payload: Dict[str, object]) -> Dict[str, object]:
+        query = _build_dashen_sameplay_query(payload)
+        _validate_dashen_sameplay_query(query)
+        index_value = _coerce_optional_int(payload, "index", "idx")
+        match_id = str(payload.get("match_id") or payload.get("matchId") or "").strip()
+        if not match_id and index_value is None:
+            raise ModuleError(
+                error="missing_match_selector",
+                message="index or match_id is required for sameplay detail.",
+                status_code=400,
+                hint='Example: {"player1_bnet_id":"PlayerA#12345","player2_bnet_id":"PlayerB#67890","index":0}',
+            )
+        show_all_heroes = _coerce_bool(
+            payload.get("show_all_heroes", payload.get("show_all", payload.get("all_heroes"))),
+            False,
+        )
+        analyze = _coerce_bool(payload.get("analyze"), False)
+        if analyze:
+            show_all_heroes = True
+        result = await dashen_sameplay_module.query_sameplay_detail_replies(
+            query,
+            index=index_value,
+            match_id=match_id,
+            show_all_heroes=show_all_heroes,
+            analyze=analyze,
+        )
+        return {
+            "ok": True,
+            "players": {
+                "resolved": {
+                    "player1": result.player1.to_dict(),
+                    "player2": result.player2.to_dict(),
+                }
+            },
+            "customer_tokens": {
+                "player1": result.player1.customer_token,
+                "player2": result.player2.customer_token,
+            },
+            "summary": dict(result.summary),
+            "match_id": result.match_id,
+            "match_kind": result.match_kind,
+            "replies": result.replies,
+        }
+
+    async def _handle_dashen_sameplay_detail_image(self, payload: Dict[str, object]) -> bytes:
+        query = _build_dashen_sameplay_query(payload)
+        _validate_dashen_sameplay_query(query)
+        index_value = _coerce_optional_int(payload, "index", "idx")
+        match_id = str(payload.get("match_id") or payload.get("matchId") or "").strip()
+        if not match_id and index_value is None:
+            raise ModuleError(
+                error="missing_match_selector",
+                message="index or match_id is required for sameplay detail image.",
+                status_code=400,
+                hint='Example: {"player1_bnet_id":"PlayerA#12345","player2_bnet_id":"PlayerB#67890","index":0}',
+            )
+        result = await dashen_sameplay_module.query_sameplay_detail(
+            query,
+            index=index_value,
+            match_id=match_id,
+            render=True,
+        )
+        if not result.main_image:
+            raise ModuleError(
+                error="render_failed",
+                message="Dashen sameplay detail image was not generated.",
+                status_code=500,
+            )
+        return result.main_image.content
 
     async def handle_dashen_match_detail(self, payload: Dict[str, object]) -> Dict[str, object]:
         return await self.dashen_request_queue.run(
@@ -1083,10 +1356,12 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
     )
     service = OverstatsCoreService(
         dashen_max_concurrent_requests=config.dashen_max_concurrent_requests,
+        dashen_max_accepted_requests=config.dashen_max_accepted_requests,
     )
     print(
         "[overstats] dashen request queue enabled "
-        f"max_concurrent={config.dashen_max_concurrent_requests}"
+        f"max_concurrent={config.dashen_max_concurrent_requests} "
+        f"max_accepted={config.dashen_max_accepted_requests}"
     )
     async_runner = AsyncRunner()
     request_metrics_recorder = RequestMetricsRecorder()
@@ -1115,6 +1390,7 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
                         "service": "overstats-core",
                         "default_stream": config.use_stream_response,
                         "dashen_max_concurrent_requests": config.dashen_max_concurrent_requests,
+                        "dashen_max_accepted_requests": config.dashen_max_accepted_requests,
                     },
                 )
                 return
@@ -1241,6 +1517,30 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
 
             if path == "/api/v2/dashen-match":
                 self._handle_dashen_match_post()
+                return
+
+            if path == "/api/v2/dashen-sameplay/detail/replies":
+                self._handle_dashen_sameplay_detail_replies_post()
+                return
+
+            if path == "/api/v2/dashen-sameplay/detail/image":
+                self._handle_dashen_sameplay_detail_image_post()
+                return
+
+            if path == "/api/v2/dashen-sameplay/detail":
+                self._handle_dashen_sameplay_detail_post()
+                return
+
+            if path == "/api/v2/dashen-sameplay/replies":
+                self._handle_dashen_sameplay_replies_post()
+                return
+
+            if path == "/api/v2/dashen-sameplay/image":
+                self._handle_dashen_sameplay_image_post()
+                return
+
+            if path == "/api/v2/dashen-sameplay":
+                self._handle_dashen_sameplay_post()
                 return
 
             if path != "/api/v2/query":
@@ -1438,6 +1738,141 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
                 return
 
             self._send_json(HTTPStatus.OK, result)
+
+        def _handle_dashen_sameplay_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                result = async_runner.run(service.handle_dashen_sameplay(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_json(HTTPStatus.OK, result)
+
+        def _handle_dashen_sameplay_replies_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                result = async_runner.run(service.handle_dashen_sameplay_replies(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_json(HTTPStatus.OK, result)
+
+        def _handle_dashen_sameplay_image_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                image_body = async_runner.run(service.handle_dashen_sameplay_image(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_binary(HTTPStatus.OK, image_body, "image/png")
 
         def _handle_ow_shop_post(self) -> None:
             try:
@@ -2311,6 +2746,141 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
 
             try:
                 image_body = async_runner.run(service.handle_dashen_match_detail_image(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_binary(HTTPStatus.OK, image_body, "image/png")
+
+        def _handle_dashen_sameplay_detail_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                result = async_runner.run(service.handle_dashen_sameplay_detail(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_json(HTTPStatus.OK, result)
+
+        def _handle_dashen_sameplay_detail_replies_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                result = async_runner.run(service.handle_dashen_sameplay_detail_replies(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_json(HTTPStatus.OK, result)
+
+        def _handle_dashen_sameplay_detail_image_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                image_body = async_runner.run(service.handle_dashen_sameplay_detail_image(payload))
             except ModuleError as exc:
                 self._send_json(
                     HTTPStatus(exc.status_code),

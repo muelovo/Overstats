@@ -34,6 +34,9 @@ DASHEN_USER_AGENT = (
 )
 DASHEN_ACCOUNT_FAILURE_COOLDOWN_SECONDS = 60
 DASHEN_MAX_CONCURRENT_REQUESTS = 2
+# Main v2 Dashen endpoints accept at most account-pool-size * 4 requests
+# (active + queued) by default. Extra requests receive HTTP 429.
+DASHEN_MAX_ACCEPTED_REQUESTS = max(len(DASHEN_ACCOUNTS) * 4, 1)
 
 # Optional proxy settings.
 DASHEN_INTERNATIONAL_PROXY = ""
@@ -61,8 +64,10 @@ ANALYSIS_BASE_URL = ""
 ANALYSIS_API_KEY = "replace-with-your-analysis-api-key"
 
 # ANALYSIS_GOOGLE_MODEL = "gemini-3.1-flash-lite-preview"
-# ANALYSIS_OPENAI_MODEL = ""
-ANALYSIS_DEEPSEEK_MODEL = "deepseek-chat"
+#ANALYSIS_DEEPSEEK_MODEL = "deepseek-chat"
+#除谷歌和deepseek以外的模型使用下面配置
+ANALYSIS_OPENAI_MODEL = ""
+
 
 # Optional external patch-note fetch proxy.
 PATCH_NOTES_USE_INTERNATIONAL_PROXY = False

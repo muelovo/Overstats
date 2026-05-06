@@ -6,6 +6,7 @@
   const moduleMap = new Map(modules.map((item) => [item.id, item]));
 
   const MATCH_DETAIL_MODULE_ID = "dashen-match-detail";
+  const SAMEPLAY_DETAIL_MODULE_ID = "dashen-sameplay-detail";
 
   const state = {
     activeModuleId: bootstrap.default_module_id || (modules[0] && modules[0].id) || "",
@@ -45,7 +46,9 @@
   }
 
   function isReplyBundleModule(module) {
-    return Boolean(module && module.id === MATCH_DETAIL_MODULE_ID);
+    return Boolean(
+      module && (module.id === MATCH_DETAIL_MODULE_ID || module.id === SAMEPLAY_DETAIL_MODULE_ID)
+    );
   }
 
   function getEffectiveEndpoint(module) {
@@ -108,7 +111,7 @@
     elements.replyPreview.innerHTML = "";
     elements.replyPreview.classList.add("hidden");
     elements.replyPlaceholder.classList.remove("hidden");
-    setReplyMeta("Available for match detail replies");
+    setReplyMeta("Available for reply bundle modules");
   }
 
   function showImagePreview(blob) {
@@ -497,7 +500,7 @@
 
       if (response.ok) {
         if (isReplyBundleModule(activeModule)) {
-          setStatus("Match detail reply bundle loaded");
+          setStatus("Reply bundle loaded");
         } else {
           setStatus("JSON request succeeded");
         }

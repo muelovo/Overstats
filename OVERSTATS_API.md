@@ -626,6 +626,95 @@ The `/image` endpoint returns `image/png` in the same visual family as quick str
 - `show_all_heroes=true` 且 `analyze=true`：主战绩图 + 全员瀑布图 + AI锐评图
 - `match_kind == "fight"`：只返回角斗主图；若请求全员详细 / AI锐评，会追加文本说明
 
+## 2.3 `dashen_sameplay`
+
+端点：
+
+- `POST /api/v2/dashen-sameplay`
+- `POST /api/v2/dashen-sameplay/image`
+- `POST /api/v2/dashen-sameplay/replies`
+- `POST /api/v2/dashen-sameplay/detail`
+- `POST /api/v2/dashen-sameplay/detail/image`
+- `POST /api/v2/dashen-sameplay/detail/replies`
+
+列表请求至少提供：
+
+- `player1_bnet_id` 或 `player1_customer_token`
+- `player2_bnet_id` 或 `player2_customer_token`
+
+列表可选字段：
+
+- `limit`
+- `include_previous_season`
+
+详情请求额外支持：
+
+- `index` 或 `match_id`
+- `show_all_heroes`
+- `analyze`
+
+同玩查询只统计快速/竞技对局，默认回溯当前赛季和上一赛季。
+
+**`/api/v2/dashen-sameplay` 返回结构示例**
+
+```json
+{
+  "ok": true,
+  "players": {
+    "resolved": {
+      "player1": {
+        "query": "Alpha#1111",
+        "full_id": "Alpha#1111",
+        "bnet_id": "1111",
+        "customer_token": "token-alpha",
+        "has_customer_token": true
+      },
+      "player2": {
+        "query": "Bravo#2222",
+        "full_id": "Bravo#2222",
+        "bnet_id": "2222",
+        "customer_token": "token-bravo",
+        "has_customer_token": true
+      }
+    }
+  },
+  "customer_tokens": {
+    "player1": "token-alpha",
+    "player2": "token-bravo"
+  },
+  "summary": {
+    "total_common_count": 6,
+    "returned_count": 6,
+    "quick_count": 4,
+    "competitive_count": 2,
+    "scanned_count": 84
+  },
+  "matches": [
+    {
+      "matchId": "match-uuid",
+      "beginTs": 1777098388787,
+      "gameMode": "sport"
+    }
+  ]
+}
+```
+
+**`/api/v2/dashen-sameplay/replies` 返回规则**
+
+- 第一条为 `meta_type=ds_sameplay_list`
+- 其后返回同玩列表图片
+- `data.match_entries` 只缓存当前可见列表条目，便于 bot 回复 `1` / `1*` / `1**`
+
+**`/api/v2/dashen-sameplay/detail/replies` 返回规则**
+
+- 第一条为 `meta_type=ds_match_detail_players`
+- 默认顺序：主战绩图、玩家1英雄详情图、玩家2英雄详情图
+- `show_all_heroes=true` 时追加全员详细瀑布图
+- `analyze=true` 时再追加 AI 锐评图
+- 若某一侧英雄详情补全失败，会保留已成功图片并追加一条文本说明
+
+`/api/v2/dashen-sameplay/detail/image` 只返回主战绩图。
+
 ## 3. `dashen_summary`
 
 端点：

@@ -67,6 +67,7 @@ class APIConfig:
     port: int
     use_stream_response: bool
     dashen_max_concurrent_requests: int
+    dashen_max_accepted_requests: int = 4
 
 
 @dataclass(frozen=True)
@@ -131,6 +132,13 @@ def _normalize_accounts() -> Tuple[DashenCredentialConfig, ...]:
     return tuple(normalized_accounts)
 
 
+def _default_dashen_max_accepted_requests() -> int:
+    raw_accounts = getattr(config, "DASHEN_ACCOUNTS", [])
+    if not isinstance(raw_accounts, (list, tuple)):
+        return 4
+    return max(1, len(raw_accounts) * 4)
+
+
 def get_api_config() -> APIConfig:
     return APIConfig(
         host=os.getenv("OVERSTATS_API_HOST", config.API_HOST),
@@ -142,6 +150,17 @@ def get_api_config() -> APIConfig:
         dashen_max_concurrent_requests=_read_int_env(
             "OVERSTATS_DASHEN_MAX_CONCURRENT_REQUESTS",
             getattr(config, "DASHEN_MAX_CONCURRENT_REQUESTS", 2),
+        ),
+        dashen_max_accepted_requests=max(
+            1,
+            _read_int_env(
+                "OVERSTATS_DASHEN_MAX_ACCEPTED_REQUESTS",
+                getattr(
+                    config,
+                    "DASHEN_MAX_ACCEPTED_REQUESTS",
+                    _default_dashen_max_accepted_requests(),
+                ),
+            ),
         ),
     )
 

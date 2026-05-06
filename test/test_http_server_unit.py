@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import base64
 from pathlib import Path
+from types import SimpleNamespace
 import sys
 import threading
 import time
@@ -31,6 +34,8 @@ class RegistryTests(unittest.TestCase):
         self.assertIn("dashen-profile", module_map)
         self.assertIn("dashen-match", module_map)
         self.assertIn("dashen-match-detail", module_map)
+        self.assertIn("dashen-sameplay", module_map)
+        self.assertIn("dashen-sameplay-detail", module_map)
         self.assertIn("dashen-summary-week", module_map)
         self.assertIn("ow-hero-pick-rate", module_map)
         self.assertIn("ow-shop", module_map)
@@ -39,10 +44,14 @@ class RegistryTests(unittest.TestCase):
         self.assertFalse(module_map["ow-shop"].requires_target)
         self.assertFalse(module_map["patch-notes"].requires_target)
         self.assertTrue(module_map["dashen-profile"].requires_target)
+        self.assertFalse(module_map["dashen-sameplay"].requires_target)
+        self.assertFalse(module_map["dashen-sameplay-detail"].requires_target)
         self.assertNotIn("player-identity-search", module_map)
         self.assertEqual(module_map["dashen-summary-week"].json_endpoint, "/api/v2/dashen-summary/week")
         self.assertEqual(module_map["dashen-summary-week"].image_endpoint, "/api/v2/dashen-summary/week/image")
         self.assertEqual(module_map["dashen-match-detail"].json_endpoint, "/api/v2/dashen-match/detail/replies")
+        self.assertEqual(module_map["dashen-sameplay"].json_endpoint, "/api/v2/dashen-sameplay")
+        self.assertEqual(module_map["dashen-sameplay-detail"].json_endpoint, "/api/v2/dashen-sameplay/detail/replies")
 
     def test_module_field_specs_match_expected_payload_keys(self) -> None:
         modules = {item.id: item for item in get_http_ui_module_specs()}
@@ -50,6 +59,8 @@ class RegistryTests(unittest.TestCase):
         dashen_profile_fields = {field.id: field for field in modules["dashen-profile"].fields}
         patch_notes_fields = {field.id: field for field in modules["patch-notes"].fields}
         match_detail_fields = {field.id: field for field in modules["dashen-match-detail"].fields}
+        sameplay_fields = {field.id: field for field in modules["dashen-sameplay"].fields}
+        sameplay_detail_fields = {field.id: field for field in modules["dashen-sameplay-detail"].fields}
         hero_pick_rate_fields = {field.id: field for field in modules["ow-hero-pick-rate"].fields}
 
         self.assertEqual(dashen_profile_fields["profile_mode"].payload_key, "mode")
@@ -57,6 +68,11 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(patch_notes_fields["patch_kind"].default, "latest")
         self.assertEqual(match_detail_fields["analyze"].payload_key, "analyze")
         self.assertEqual(match_detail_fields["show_all_heroes"].payload_key, "show_all_heroes")
+        self.assertEqual(sameplay_fields["player1_bnet_id"].payload_key, "player1_bnet_id")
+        self.assertEqual(sameplay_fields["player2_bnet_id"].payload_key, "player2_bnet_id")
+        self.assertEqual(sameplay_detail_fields["match_id"].payload_key, "match_id")
+        self.assertEqual(sameplay_detail_fields["show_all_heroes"].payload_key, "show_all_heroes")
+        self.assertEqual(sameplay_detail_fields["analyze"].payload_key, "analyze")
         self.assertEqual(hero_pick_rate_fields["view"].payload_key, "view")
         self.assertEqual(hero_pick_rate_fields["game_mode"].payload_key, "game_mode")
         self.assertEqual(hero_pick_rate_fields["mmr"].payload_key, "mmr")
@@ -68,7 +84,7 @@ class RegistryTests(unittest.TestCase):
 
         self.assertIn("modules", payload)
         self.assertEqual(payload["default_module_id"], "dashen-profile")
-        self.assertGreaterEqual(len(payload["modules"]), 11)
+        self.assertGreaterEqual(len(payload["modules"]), 13)
 
 
 class AssetResponseTests(unittest.TestCase):
@@ -90,6 +106,7 @@ class AssetResponseTests(unittest.TestCase):
         self.assertIn("window.__OVERSTATS_UI_BOOTSTRAP__", html)
         self.assertIn("dashen-profile", html)
         self.assertIn("dashen-match-detail", html)
+        self.assertIn("dashen-sameplay-detail", html)
 
     def test_static_assets_and_ui_health_exist(self) -> None:
         css_response = resolve_http_ui_asset("/ui/app.css")
@@ -110,9 +127,43 @@ class AssetResponseTests(unittest.TestCase):
         self.assertIsNotNone(response)
         js_text = response.body.decode("utf-8")
         self.assertIn("MATCH_DETAIL_MODULE_ID", js_text)
+        self.assertIn("SAMEPLAY_DETAIL_MODULE_ID", js_text)
         self.assertIn("getEffectiveEndpoint", js_text)
         self.assertIn("renderReplyPreview", js_text)
         self.assertIn("extractFirstImageReply", js_text)
+
+
+class DashenRequestQueueTests(unittest.IsolatedAsyncioTestCase):
+    async def test_rejects_when_pending_requests_hit_accept_limit(self) -> None:
+        queue = server_module.DashenRequestQueue(max_concurrent_requests=1, max_accepted_requests=2)
+        release_event = asyncio.Event()
+
+        async def _slow_task() -> str:
+            await release_event.wait()
+            return "ok"
+
+        first_task = asyncio.create_task(queue.run("first", _slow_task))
+        await asyncio.sleep(0)
+
+        second_task = asyncio.create_task(queue.run("second", _slow_task))
+        for _ in range(50):
+            if queue._queued_requests == 1:
+                break
+            await asyncio.sleep(0.01)
+        else:
+            self.fail("second task did not enter queue")
+
+        with self.assertRaises(server_module.ModuleError) as ctx:
+            await queue.run("third", _slow_task)
+
+        self.assertEqual(ctx.exception.error, "too_many_requests")
+        self.assertEqual(ctx.exception.status_code, 429)
+        self.assertEqual(ctx.exception.details["pending_requests"], 2)
+        self.assertEqual(ctx.exception.details["max_accepted_requests"], 2)
+
+        release_event.set()
+        self.assertEqual(await first_task, "ok")
+        self.assertEqual(await second_task, "ok")
 
 
 class ServerRouteIntegrationTests(unittest.TestCase):
@@ -123,6 +174,7 @@ class ServerRouteIntegrationTests(unittest.TestCase):
         original_sync_service = server_module.OWHeroLeaderboardSyncService
         original_pick_rate_module = server_module.ow_hero_pick_rate_module
         original_ow_shop_module = server_module.ow_shop_module
+        original_sameplay_module = server_module.dashen_sameplay_module
         original_player_identity_search_module = server_module.player_identity_search_module
         original_client_recorder = server_module.dashen_api_client.request_metrics_recorder
 
@@ -138,6 +190,7 @@ class ServerRouteIntegrationTests(unittest.TestCase):
         server_module.OWHeroLeaderboardSyncService = _StubSyncService
         server_module.ow_hero_pick_rate_module = _StubOWHeroPickRateModule()
         server_module.ow_shop_module = _StubOWShopModule()
+        server_module.dashen_sameplay_module = _StubDashenSameplayModule()
         server_module.player_identity_search_module = _StubPlayerIdentitySearchModule()
 
         server = None
@@ -148,6 +201,7 @@ class ServerRouteIntegrationTests(unittest.TestCase):
                 port=0,
                 use_stream_response=False,
                 dashen_max_concurrent_requests=1,
+                dashen_max_accepted_requests=4,
             )
             server = server_module.create_server(config)
             thread = threading.Thread(target=server.serve_forever, name="test-http-ui-server", daemon=True)
@@ -168,6 +222,7 @@ class ServerRouteIntegrationTests(unittest.TestCase):
                 self.assertEqual(response.status, 200)
                 self.assertIn("application/javascript", response.headers.get("Content-Type", ""))
                 self.assertIn("MATCH_DETAIL_MODULE_ID", js_text)
+                self.assertIn("SAMEPLAY_DETAIL_MODULE_ID", js_text)
 
             with opener.open(base_url + "/ui/app.css", timeout=10) as response:
                 css_text = response.read().decode("utf-8")
@@ -182,6 +237,7 @@ class ServerRouteIntegrationTests(unittest.TestCase):
             with opener.open(base_url + "/healthz", timeout=10) as response:
                 payload = json.loads(response.read().decode("utf-8"))
                 self.assertEqual(payload["service"], "overstats-core")
+                self.assertEqual(payload["dashen_max_accepted_requests"], 4)
 
             body = json.dumps({}).encode("utf-8")
             request = Request(
@@ -233,6 +289,72 @@ class ServerRouteIntegrationTests(unittest.TestCase):
                 self.assertEqual(payload["query"]["bnet_id"], "12345")
                 self.assertEqual(payload["candidates"], ["GrowlR#5632", "GrowlRAlt#9001"])
                 self.assertEqual(payload["matches"][0]["match_type"], "exact")
+
+            sameplay_body = json.dumps(
+                {"player1_bnet_id": "Alpha#1111", "player2_bnet_id": "Bravo#2222", "limit": 1}
+            ).encode("utf-8")
+            sameplay_request = Request(
+                base_url + "/api/v2/dashen-sameplay",
+                data=sameplay_body,
+                headers={"Content-Type": "application/json; charset=utf-8"},
+                method="POST",
+            )
+            with opener.open(sameplay_request, timeout=10) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+                self.assertTrue(payload["ok"])
+                self.assertEqual(payload["players"]["resolved"]["player1"]["full_id"], "Alpha#1111")
+                self.assertEqual(payload["customer_tokens"]["player2"], "token-bravo")
+                self.assertEqual(payload["summary"]["total_common_count"], 1)
+                self.assertEqual(payload["matches"][0]["matchId"], "m2")
+
+            sameplay_list_replies_request = Request(
+                base_url + "/api/v2/dashen-sameplay/replies",
+                data=sameplay_body,
+                headers={"Content-Type": "application/json; charset=utf-8"},
+                method="POST",
+            )
+            with opener.open(sameplay_list_replies_request, timeout=10) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+                self.assertTrue(payload["ok"])
+                self.assertEqual(payload["replies"][0]["meta_type"], "ds_sameplay_list")
+                self.assertEqual(payload["replies"][1]["type"], "image")
+
+            sameplay_replies_body = json.dumps(
+                {
+                    "player1_customer_token": "token-alpha",
+                    "player2_customer_token": "token-bravo",
+                    "match_id": "m2",
+                    "show_all_heroes": True,
+                    "analyze": True,
+                }
+            ).encode("utf-8")
+            sameplay_replies_request = Request(
+                base_url + "/api/v2/dashen-sameplay/detail/replies",
+                data=sameplay_replies_body,
+                headers={"Content-Type": "application/json; charset=utf-8"},
+                method="POST",
+            )
+            with opener.open(sameplay_replies_request, timeout=10) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+                self.assertTrue(payload["ok"])
+                self.assertEqual(payload["match_id"], "m2")
+                self.assertEqual(payload["replies"][0]["meta_type"], "ds_match_detail_players")
+                self.assertEqual(payload["replies"][1]["type"], "image")
+
+            sameplay_image_body = json.dumps(
+                {"player1_bnet_id": "Alpha#1111", "player2_bnet_id": "Bravo#2222", "index": 0}
+            ).encode("utf-8")
+            sameplay_image_request = Request(
+                base_url + "/api/v2/dashen-sameplay/detail/image",
+                data=sameplay_image_body,
+                headers={"Content-Type": "application/json; charset=utf-8"},
+                method="POST",
+            )
+            with opener.open(sameplay_image_request, timeout=10) as response:
+                image_body = response.read()
+                self.assertEqual(response.status, 200)
+                self.assertIn("image/png", response.headers.get("Content-Type", ""))
+                self.assertEqual(image_body, b"sameplay-main-image")
         finally:
             if server is not None:
                 try:
@@ -251,6 +373,7 @@ class ServerRouteIntegrationTests(unittest.TestCase):
             server_module.OWHeroLeaderboardSyncService = original_sync_service
             server_module.ow_hero_pick_rate_module = original_pick_rate_module
             server_module.ow_shop_module = original_ow_shop_module
+            server_module.dashen_sameplay_module = original_sameplay_module
             server_module.player_identity_search_module = original_player_identity_search_module
             server_module.dashen_api_client.request_metrics_recorder = original_client_recorder
 
@@ -343,6 +466,146 @@ class _StubOWHeroPickRateImage:
 class _StubOWHeroPickRateModule:
     async def query_pick_rate(self, query, *, render=False):  # noqa: ANN001
         return _StubOWHeroPickRateOutput(with_image=render)
+
+
+class _StubDashenSameplayPlayer:
+    def __init__(self, full_id, bnet_id, customer_token):  # noqa: ANN001
+        self.full_id = full_id
+        self.bnet_id = bnet_id
+        self.customer_token = customer_token
+
+    def to_dict(self):
+        return {
+            "query": self.full_id,
+            "full_id": self.full_id,
+            "bnet_id": self.bnet_id,
+            "customer_token": self.customer_token,
+            "has_customer_token": bool(self.customer_token),
+        }
+
+
+class _StubDashenSameplayImage:
+    def __init__(self, content):  # noqa: ANN001
+        self.content = content
+        self.media_type = "image/png"
+
+
+class _StubDashenSameplayModule:
+    def __init__(self) -> None:
+        self.player1 = _StubDashenSameplayPlayer("Alpha#1111", "1111", "token-alpha")
+        self.player2 = _StubDashenSameplayPlayer("Bravo#2222", "2222", "token-bravo")
+
+    async def query_sameplay_list(self, query, *, render=False):  # noqa: ANN001
+        return SimpleNamespace(
+            player1=self.player1,
+            player2=self.player2,
+            summary={
+                "total_common_count": 1,
+                "returned_count": 1,
+                "quick_count": 0,
+                "competitive_count": 1,
+                "scanned_count": 4,
+            },
+            matches=[{"matchId": "m2", "beginTs": 200, "gameMode": "sport"}],
+            image=_StubDashenSameplayImage(b"sameplay-list-image") if render else None,
+        )
+
+    async def query_sameplay_list_replies(self, query):  # noqa: ANN001
+        return SimpleNamespace(
+            player1=self.player1,
+            player2=self.player2,
+            summary={
+                "total_common_count": 1,
+                "returned_count": 1,
+                "quick_count": 0,
+                "competitive_count": 1,
+                "scanned_count": 4,
+            },
+            replies=[
+                {
+                    "type": "meta",
+                    "meta_type": "ds_sameplay_list",
+                    "data": {
+                        "context_type": "ds_sameplay_list",
+                        "players": {"player1": self.player1.to_dict(), "player2": self.player2.to_dict()},
+                        "customer_tokens": {
+                            "player1": self.player1.customer_token,
+                            "player2": self.player2.customer_token,
+                        },
+                        "summary": {
+                            "total_common_count": 1,
+                            "returned_count": 1,
+                            "quick_count": 0,
+                            "competitive_count": 1,
+                            "scanned_count": 4,
+                        },
+                        "match_entries": [{"matchId": "m2", "beginTs": 200, "gameMode": "sport"}],
+                    },
+                },
+                {
+                    "type": "image",
+                    "media_type": "image/png",
+                    "base64": base64.b64encode(b"sameplay-list-image").decode("ascii"),
+                },
+            ],
+            matches=[{"matchId": "m2", "beginTs": 200, "gameMode": "sport"}],
+        )
+
+    async def query_sameplay_detail(self, query, *, match_id="", render=True, **kwargs):  # noqa: ANN001
+        return SimpleNamespace(
+            player1=self.player1,
+            player2=self.player2,
+            summary={
+                "total_common_count": 1,
+                "returned_count": 1,
+                "quick_count": 0,
+                "competitive_count": 1,
+                "scanned_count": 4,
+            },
+            matches=[{"matchId": match_id or "m2", "beginTs": 200, "gameMode": "sport"}],
+            source_match={"matchId": match_id or "m2", "beginTs": 200, "gameMode": "sport"},
+            match_id=match_id or "m2",
+            match_kind="normal",
+            detail={"data": {"gameMode": "sport", "teammateList": [], "enemyList": []}},
+            main_image=_StubDashenSameplayImage(b"sameplay-main-image") if render else None,
+            main_detail_source_player=1,
+            player_details=[],
+            waterfall_image=None,
+            analysis_image=None,
+            notes=[],
+        )
+
+    async def query_sameplay_detail_replies(self, query, *, match_id="", **kwargs):  # noqa: ANN001
+        return SimpleNamespace(
+            player1=self.player1,
+            player2=self.player2,
+            summary={
+                "total_common_count": 1,
+                "returned_count": 1,
+                "quick_count": 0,
+                "competitive_count": 1,
+                "scanned_count": 4,
+            },
+            replies=[
+                {
+                    "type": "meta",
+                    "meta_type": "ds_match_detail_players",
+                    "data": {
+                        "context_type": "ds_match_detail_players",
+                        "player_ids": ["Alpha#1111", "Bravo#2222"],
+                        "competitive": True,
+                    },
+                },
+                {
+                    "type": "image",
+                    "media_type": "image/png",
+                    "base64": base64.b64encode(b"sameplay-main-image").decode("ascii"),
+                },
+            ],
+            matches=[{"matchId": match_id or "m2", "beginTs": 200, "gameMode": "sport"}],
+            match_id=match_id or "m2",
+            match_kind="normal",
+        )
 
 
 class _StubPlayerIdentityMatch:
