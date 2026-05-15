@@ -540,6 +540,74 @@ JSON response shape:
 
 The `/image` endpoint returns `image/png` using the same grouped rank-board structure as the province leaderboard, with hero color accents and hero icon decoration when cached assets are available.
 
+## Hero Perk API
+
+Endpoints:
+
+- `POST /api/v2/ow-hero-perk`
+- `POST /api/v2/ow-hero-perk/image`
+
+Request body:
+
+```json
+{
+  "hero": "安娜"
+}
+```
+
+`hero` supports Chinese hero names, common aliases, and direct `heroGuid`.
+
+JSON response shape:
+
+```json
+{
+  "ok": true,
+  "hero": {
+    "hero_guid": "1014",
+    "hero_id": "0x02E000000000013B",
+    "hero_name": "安娜",
+    "hero_role": "healer",
+    "icon_url": "https://..."
+  },
+  "minor": {
+    "level": 1,
+    "title": "次级威能",
+    "sample_count": 1280,
+    "perks": [
+      {
+        "perk_guid": "2147499902",
+        "perk_guid_hex": "0x0000000080002BDE",
+        "name": "示例威能",
+        "desc": "威能描述",
+        "icon_url": "https://...",
+        "pick_count": 612,
+        "sample_count": 1280,
+        "pick_rate": 0.478125
+      }
+    ]
+  },
+  "major": {
+    "level": 2,
+    "title": "主要威能",
+    "sample_count": 1280,
+    "perks": [
+      {
+        "perk_guid": "2147500010",
+        "perk_guid_hex": "0x0000000080002C4A",
+        "name": "示例威能 2",
+        "desc": "威能描述 2",
+        "icon_url": "https://...",
+        "pick_count": 544,
+        "sample_count": 1280,
+        "pick_rate": 0.425
+      }
+    ]
+  }
+}
+```
+
+The JSON response returns the full sorted minor/major perk lists. The `/image` endpoint returns `image/png` in the overstats background-card layout and only renders the top 2 perks for each tier, while still using the real sample count for pick-rate calculation.
+
 ## Hero Pick Rate API
 
 Endpoints:

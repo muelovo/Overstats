@@ -16,7 +16,7 @@
   --radius-lg: 20px;
   --radius-md: 14px;
   --mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  --sans: "Trebuchet MS", "Segoe UI", sans-serif;
+  --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
 }
 
 * {

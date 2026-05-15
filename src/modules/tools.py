@@ -102,6 +102,12 @@ register_module(
 )
 
 register_module(
+    "ow_hero_perk",
+    "overstats.src.modules.ow_hero_perk",
+    "Hero perk overview reader with merged query-tool metadata and PIL renderer.",
+)
+
+register_module(
     "ow_shop",
     "overstats.src.modules.ow_shop",
     "Overwatch shop fetcher, cache manager, and PIL renderer.",

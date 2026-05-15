@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import math
 import sqlite3
 import threading
@@ -733,6 +734,118 @@ class IDPoolDB:
             except Exception:
                 pass
         return {}
+
+    def get_perk_pick_summary_from_raw(
+        self,
+        hero_guid: str,
+        perk_level: int,
+        rank_scores: Optional[List[int]] = None,
+        include_overall: bool = True,
+    ) -> Dict[Any, Dict[str, Any]]:
+        hero_guid = str(hero_guid or "").strip()
+        if not hero_guid:
+            return {}
+        normalized_perk_level = max(0, int(perk_level or 0))
+        normalized_ranks = [int(item) for item in (rank_scores or [])]
+
+        conn = self._get_connection()
+        if conn is None:
+            return {}
+        try:
+            if not self._table_exists(conn, HERO_PERK_PICK_TABLE):
+                return {}
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    f"""
+                    SELECT
+                        perk_guid,
+                        rank_bucket,
+                        match_id,
+                        player_bnet_id
+                    FROM {HERO_PERK_PICK_TABLE}
+                    WHERE hero_guid = ? AND perk_level = ?
+                    ORDER BY rank_bucket ASC, perk_guid ASC
+                    """,
+                    (hero_guid, normalized_perk_level),
+                )
+                rows = cursor.fetchall() or []
+            finally:
+                cursor.close()
+        except Exception as exc:
+            self._warn_once(
+                f"match stats sqlite get_perk_pick_summary_from_raw failed: {type(exc).__name__}: {exc}"
+            )
+            return {}
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        if not rows:
+            return {}
+
+        overall_samples: set[tuple[str, str]] = set()
+        overall_counts: Counter[str] = Counter()
+        rank_samples: Dict[int, set[tuple[str, str]]] = {}
+        rank_counts: Dict[int, Counter[str]] = {}
+        for perk_guid, rank_bucket, match_id, player_bnet_id in rows:
+            normalized_perk_guid = str(perk_guid or "").strip()
+            normalized_match_id = str(match_id or "").strip()
+            normalized_player_id = str(player_bnet_id or "").strip()
+            if not normalized_perk_guid or not normalized_match_id or not normalized_player_id:
+                continue
+            sample_key = (normalized_match_id, normalized_player_id)
+            overall_samples.add(sample_key)
+            overall_counts[normalized_perk_guid] += 1
+            if rank_bucket is None:
+                continue
+            normalized_rank_bucket = int(rank_bucket)
+            rank_samples.setdefault(normalized_rank_bucket, set()).add(sample_key)
+            rank_counts.setdefault(normalized_rank_bucket, Counter())[normalized_perk_guid] += 1
+
+        result: Dict[Any, Dict[str, Any]] = {}
+        overall_sample_count = len(overall_samples)
+        if include_overall and overall_sample_count > 0:
+            result[None] = {
+                "hero_guid": hero_guid,
+                "perk_level": normalized_perk_level,
+                "sample_count": overall_sample_count,
+                "perks": {
+                    perk_guid: {
+                        "pick_count": int(pick_count),
+                        "sample_count": overall_sample_count,
+                        "pick_rate": float(pick_count / overall_sample_count),
+                    }
+                    for perk_guid, pick_count in overall_counts.items()
+                },
+            }
+
+        if normalized_ranks:
+            selected_ranks = list(dict.fromkeys(normalized_ranks))
+        else:
+            selected_ranks = sorted(rank_counts)
+
+        for rank_bucket in selected_ranks:
+            sample_count = len(rank_samples.get(rank_bucket) or ())
+            if sample_count <= 0:
+                continue
+            counter = rank_counts.get(rank_bucket) or Counter()
+            result[int(rank_bucket)] = {
+                "hero_guid": hero_guid,
+                "perk_level": normalized_perk_level,
+                "sample_count": sample_count,
+                "perks": {
+                    perk_guid: {
+                        "pick_count": int(pick_count),
+                        "sample_count": sample_count,
+                        "pick_rate": float(pick_count / sample_count),
+                    }
+                    for perk_guid, pick_count in counter.items()
+                },
+            }
+        return result
 
     def _expand_comp_summary_keys(
         self,

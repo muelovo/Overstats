@@ -455,6 +455,23 @@ HTTP_UI_MODULE_SPECS: Tuple[HTTPUIModuleSpec, ...] = (
         ),
     ),
     HTTPUIModuleSpec(
+        id="ow-hero-perk",
+        title="威能总览",
+        description="查看指定英雄的次级/主要威能总览，JSON 返回完整排序，图片展示每档前 2 项。",
+        json_endpoint="/api/v2/ow-hero-perk",
+        image_endpoint="/api/v2/ow-hero-perk/image",
+        requires_target=False,
+        fields=(
+            HTTPUIFieldSpec(
+                id="hero",
+                label="英雄",
+                payload_key="hero",
+                placeholder="例如：安娜 / Tracer / heroGuid",
+                help_text="支持中文名、常见别名和 heroGuid。",
+            ),
+        ),
+    ),
+    HTTPUIModuleSpec(
         id="dashen-summary-today",
         title="今日总结",
         description="生成今日总结；周总结会更慢一些。",

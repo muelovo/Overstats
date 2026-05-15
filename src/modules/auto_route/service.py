@@ -40,6 +40,7 @@ AUTO_ROUTE_SUPPORTED_COMMANDS = (
     "OW赛事",
     "守望赛事",
 )
+AUTO_ROUTE_SUPPORTED_COMMANDS = AUTO_ROUTE_SUPPORTED_COMMANDS + ("威能 安娜",)
 AUTO_ROUTE_GAME_MODE_ALIASES = {
     "快速": "quick",
     "quick": "quick",
@@ -102,8 +103,9 @@ Rules:
 3. For match and sameplay detail, index is 1-based.
 4. If analyze=true, also set show_all_heroes=true.
 5. For hero_pick_rate, default to ranking + quick + all unless the user clearly asks for history or another mode/rank.
-6. For patch_notes, default to latest.
-7. If the user asks for one player tool but the target is missing, still choose the best tool instead of chatting.
+6. For hero_perk, only pass the hero name or heroGuid.
+7. For patch_notes, default to latest.
+8. If the user asks for one player tool but the target is missing, still choose the best tool instead of chatting.
 """.strip()
 
 
@@ -290,6 +292,7 @@ class AutoRouteModule:
             "quick_strength": self._build_quick_strength_selection,
             "competitive_strength": self._build_competitive_strength_selection,
             "hero_pick_rate": self._build_hero_pick_rate_selection,
+            "hero_perk": self._build_hero_perk_selection,
             "ow_esports": self._build_ow_esports_selection,
             "ow_shop": self._build_ow_shop_selection,
             "patch_notes": self._build_patch_notes_selection,
@@ -451,6 +454,21 @@ class AutoRouteModule:
                             "hero": {"type": "string"},
                             "history_limit": {"type": "integer"},
                         },
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "hero_perk",
+                    "description": "Query a hero's perk overview.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "hero": {"type": "string"},
+                        },
+                        "required": ["hero"],
                         "additionalProperties": False,
                     },
                 },
@@ -669,6 +687,22 @@ class AutoRouteModule:
             endpoint="/api/v2/ow-hero-pick-rate/image",
             endpoint_mode="image",
             payload=payload,
+        )
+
+    def _build_hero_perk_selection(self, arguments: Dict[str, Any]) -> AutoRouteSelection:
+        hero = _normalize_tool_text(arguments.get("hero"))
+        if not hero:
+            raise ModuleError(
+                error="auto_route_invalid_arguments",
+                message="hero is required for hero_perk.",
+                status_code=400,
+            )
+        return AutoRouteSelection(
+            tool_name="hero_perk",
+            module_name="ow_hero_perk",
+            endpoint="/api/v2/ow-hero-perk/image",
+            endpoint_mode="image",
+            payload={"hero": hero},
         )
 
     def _build_ow_esports_selection(self, arguments: Dict[str, Any]) -> AutoRouteSelection:
