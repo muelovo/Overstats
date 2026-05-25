@@ -42,6 +42,7 @@ AUTO_ROUTE_SUPPORTED_COMMANDS = (
 )
 AUTO_ROUTE_SUPPORTED_COMMANDS = AUTO_ROUTE_SUPPORTED_COMMANDS + ("威能 安娜",)
 AUTO_ROUTE_SUPPORTED_COMMANDS = AUTO_ROUTE_SUPPORTED_COMMANDS + ("英雄百科 猎空", "英雄百科 猎空 闪现最多几层")
+AUTO_ROUTE_SUPPORTED_COMMANDS = AUTO_ROUTE_SUPPORTED_COMMANDS + ("英雄云图 Player#12345", "快速英雄云图 Player#12345")
 AUTO_ROUTE_GAME_MODE_ALIASES = {
     "快速": "quick",
     "quick": "quick",
@@ -106,8 +107,9 @@ Rules:
 5. For hero_pick_rate, default to ranking + quick + all unless the user clearly asks for history or another mode/rank.
 6. For hero_perk, only pass the hero name or heroGuid.
 7. For hero_wiki, only pass hero plus an optional question about that hero.
-8. For patch_notes, default to latest.
-9. If the user asks for one player tool but the target is missing, still choose the best tool instead of chatting.
+8. For hero_treemap, default to competitive unless the user clearly asks for quick.
+9. For patch_notes, default to latest.
+10. If the user asks for one player tool but the target is missing, still choose the best tool instead of chatting.
 """.strip()
 
 
@@ -285,6 +287,7 @@ class AutoRouteModule:
         self.requests = requests or AutoRouteRequests()
         self._selection_builders: Dict[str, Callable[[Dict[str, Any]], AutoRouteSelection]] = {
             "dashen_profile": self._build_dashen_profile_selection,
+            "hero_treemap": self._build_hero_treemap_selection,
             "dashen_match": self._build_dashen_match_selection,
             "dashen_sameplay": self._build_dashen_sameplay_selection,
             "summary_today": lambda arguments: self._build_summary_selection(arguments, scope="today"),
@@ -308,6 +311,21 @@ class AutoRouteModule:
                 "function": {
                     "name": "dashen_profile",
                     "description": "Query player profile.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "target": {"type": "string"},
+                            "mode": {"type": "string", "enum": ["quick", "competitive"]},
+                        },
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "hero_treemap",
+                    "description": "Query a player's hero usage treemap.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -564,6 +582,17 @@ class AutoRouteModule:
             tool_name="dashen_profile",
             module_name="dashen_profile",
             endpoint="/api/v2/dashen-profile/image",
+            endpoint_mode="image",
+            payload=payload,
+        )
+
+    def _build_hero_treemap_selection(self, arguments: Dict[str, Any]) -> AutoRouteSelection:
+        payload = _require_target_payload(arguments.get("target"))
+        payload["mode"] = _normalize_tool_mode(arguments.get("mode"), default="competitive")
+        return AutoRouteSelection(
+            tool_name="hero_treemap",
+            module_name="dashen_hero_treemap",
+            endpoint="/api/v2/dashen-hero-treemap/image",
             endpoint_mode="image",
             payload=payload,
         )

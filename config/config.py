@@ -4,6 +4,7 @@ from __future__ import annotations
 API_HOST = "127.0.0.1"
 API_PORT = 18080
 USE_STREAM_RESPONSE = True
+ENABLE_DATABASE_WRITE = True
 
 # ======================= Dashen Upstream ====================== #
 # Configure at least one account.

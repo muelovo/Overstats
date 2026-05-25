@@ -44,11 +44,11 @@ MINOR_ACCENT = (117, 223, 174, 255)
 MAJOR_ACCENT = (255, 158, 198, 255)
 
 ROLE_LABELS = {
-    "tank": "\u91cd\u88c5",
-    "dps": "\u8f93\u51fa",
-    "damage": "\u8f93\u51fa",
-    "healer": "\u652f\u63f4",
-    "support": "\u652f\u63f4",
+    "tank": "重装",
+    "dps": "输出",
+    "damage": "输出",
+    "healer": "支援",
+    "support": "支援",
 }
 ROLE_BADGE_COLORS = {
     "tank": (118, 164, 255, 235),
@@ -112,7 +112,7 @@ def render_hero_perk_overview(
         canvas,
         draw,
         bounds=minor_box,
-        title=_bucket_title(minor, "\u6b21\u7ea7\u5a01\u80fd"),
+        title=_bucket_title(minor, "次级威能"),
         bucket=minor,
         header_accent=MINOR_ACCENT,
         fonts=fonts,
@@ -122,7 +122,7 @@ def render_hero_perk_overview(
         canvas,
         draw,
         bounds=major_box,
-        title=_bucket_title(major, "\u4e3b\u8981\u5a01\u80fd"),
+        title=_bucket_title(major, "主要威能"),
         bucket=major,
         header_accent=MAJOR_ACCENT,
         fonts=fonts,
@@ -172,11 +172,11 @@ def _draw_header(
         )
 
     text_x = avatar_x + avatar_size + 22 * scale
-    hero_name = str(hero.get("hero_name") or "\u672a\u77e5\u82f1\u96c4")
+    hero_name = str(hero.get("hero_name") or "未知英雄")
     draw.text((text_x, top + 20 * scale), hero_name, font=fonts["header_name"], fill=TEXT_MAIN)
 
     role_key = str(hero.get("hero_role") or "").strip().lower()
-    role_text = ROLE_LABELS.get(role_key, str(hero.get("hero_role") or "\u672a\u77e5\u804c\u8d23"))
+    role_text = ROLE_LABELS.get(role_key, str(hero.get("hero_role") or "未知职责"))
     role_fill = ROLE_BADGE_COLORS.get(role_key, (93, 112, 140, 235))
     _draw_role_badge(
         draw,
@@ -203,7 +203,7 @@ def _draw_section(
     _draw_card_shell(draw, bounds, radius=10 * scale)
     title_y = top + 16 * scale
     draw.text((left + 18 * scale, title_y), title, font=fonts["section_title"], fill=TEXT_MAIN)
-    sample_text = f"\u6837\u672c { _format_count(bucket.get('sample_count')) }"
+    sample_text = f"样本 { _format_count(bucket.get('sample_count')) }"
     sample_w, _ = _measure(draw, sample_text, fonts["section_meta"])
     draw.text((right - 18 * scale - sample_w, title_y + 4 * scale), sample_text, font=fonts["section_meta"], fill=TEXT_SUB)
     draw.line((left + 18 * scale, top + 56 * scale, right - 18 * scale, top + 56 * scale), fill=(93, 112, 140, 145), width=max(1, scale))
@@ -212,7 +212,7 @@ def _draw_section(
     if not perks:
         draw.text(
             (left + 24 * scale, top + 92 * scale),
-            "\u6682\u65e0\u8be5\u6863\u4f4d\u7684\u53ef\u7528\u5a01\u80fd\u6570\u636e",
+            "暂无该档位的可用威能数据",
             font=fonts["card_body"],
             fill=TEXT_DIM,
         )
@@ -258,7 +258,7 @@ def _draw_section(
         )
         draw.text(
             (right_card[0] + 18 * scale, right_card[1] + 24 * scale),
-            "\u6682\u65e0\u7b2c\u4e8c\u4e2a\u5a01\u80fd",
+            "暂无第二个威能",
             font=fonts["card_title"],
             fill=TEXT_DIM,
         )
@@ -334,19 +334,19 @@ def _draw_perk_card(
 
     info_left = left + 126 * scale
     info_width = max(1, right - info_left - 18 * scale)
-    name = str(perk.get("name") or "\u672a\u77e5\u5a01\u80fd")
+    name = str(perk.get("name") or "未知威能")
     name_lines = _wrap_text(draw, name, fonts["card_title"], info_width, 2, allow_space_join=False)
     for index, line in enumerate(name_lines):
         draw.text((info_left, top + 22 * scale + index * 28 * scale), line, font=fonts["card_title"], fill=TEXT_MAIN)
 
     desc_top = top + 84 * scale
-    desc = str(perk.get("desc") or "\u6682\u65e0\u63cf\u8ff0")
+    desc = str(perk.get("desc") or "暂无描述")
     desc_lines = _wrap_text(draw, desc, fonts["card_body"], info_width, 4)
     for index, line in enumerate(desc_lines):
         draw.text((info_left, desc_top + index * 24 * scale), line, font=fonts["card_body"], fill=TEXT_SUB)
 
     footer_y = bottom - 78 * scale
-    draw.text((info_left, footer_y), "\u4f7f\u7528\u6570", font=fonts["metric_label"], fill=TEXT_DIM)
+    draw.text((info_left, footer_y), "使用数", font=fonts["metric_label"], fill=TEXT_DIM)
     draw.text(
         (info_left, footer_y + 26 * scale),
         _format_count(perk.get("pick_count")),
@@ -354,7 +354,7 @@ def _draw_perk_card(
         fill=team_fill,
     )
     sample_label_x = info_left + 124 * scale
-    draw.text((sample_label_x, footer_y), "\u4f7f\u7528\u7387", font=fonts["metric_label"], fill=TEXT_DIM)
+    draw.text((sample_label_x, footer_y), "使用率", font=fonts["metric_label"], fill=TEXT_DIM)
     draw.text(
         (sample_label_x, footer_y + 26 * scale),
         f"{float(perk.get('pick_rate') or 0.0) * 100:.1f}%",

@@ -60,6 +60,12 @@ register_module(
 )
 
 register_module(
+    "dashen_hero_treemap",
+    "overstats.src.modules.dashen_hero_treemap",
+    "Dashen hero usage treemap data builder and PIL renderer.",
+)
+
+register_module(
     "dashen_summary",
     "overstats.src.modules.dashen_summary",
     "Dashen daily and periodic summary worker bridge.",

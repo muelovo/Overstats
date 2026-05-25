@@ -17,6 +17,11 @@ try:
     from overstats.src.db.request_metrics import RequestMetricsRecorder, normalize_request_metric_url
     from overstats.src.modules.errors import ModuleError
     from overstats.src.modules.dashen_profile import DashenProfileQuery, dashen_profile_module
+    from overstats.src.modules.dashen_hero_treemap import (
+        DashenHeroTreemapQuery,
+        dashen_hero_treemap_module,
+        normalize_treemap_mode,
+    )
     from overstats.src.modules.query_tool import ensure_query_tool_assets, load_query_tool
     from overstats.src.modules.dashen_match import DashenMatchQuery, dashen_match_module
     from overstats.src.modules.dashen_sameplay import DashenSameplayQuery, dashen_sameplay_module
@@ -58,6 +63,11 @@ except ModuleNotFoundError:
     from src.db.request_metrics import RequestMetricsRecorder, normalize_request_metric_url
     from src.modules.errors import ModuleError
     from src.modules.dashen_profile import DashenProfileQuery, dashen_profile_module
+    from src.modules.dashen_hero_treemap import (
+        DashenHeroTreemapQuery,
+        dashen_hero_treemap_module,
+        normalize_treemap_mode,
+    )
     from src.modules.query_tool import ensure_query_tool_assets, load_query_tool
     from src.modules.dashen_match import DashenMatchQuery, dashen_match_module
     from src.modules.dashen_sameplay import DashenSameplayQuery, dashen_sameplay_module
@@ -157,6 +167,26 @@ def _build_ow_hero_pick_rate_query(payload: Dict[str, object]) -> OWHeroPickRate
 def _build_ow_hero_perk_query(payload: Dict[str, object]) -> OWHeroPerkQuery:
     return OWHeroPerkQuery(
         hero=str(payload.get("hero") or "").strip(),
+    )
+
+
+def _build_dashen_hero_treemap_query(payload: Dict[str, object]) -> DashenHeroTreemapQuery:
+    raw_mode = str(payload.get("mode") or "").strip()
+    try:
+        mode = normalize_treemap_mode(raw_mode)
+    except ValueError as exc:
+        raise ModuleError(
+            error="invalid_treemap_query",
+            message=str(exc),
+            status_code=400,
+            details={"mode": raw_mode},
+        ) from exc
+    return DashenHeroTreemapQuery(
+        bnet_id=str(payload.get("bnet_id") or payload.get("bnetId") or "").strip(),
+        customer_token=str(payload.get("customer_token") or payload.get("customerToken") or "").strip(),
+        season=_coerce_optional_int(payload, "season", "season_c"),
+        include_previous_season=_coerce_bool(payload.get("include_previous_season"), True),
+        mode=mode,
     )
 
 
@@ -306,6 +336,18 @@ class OverstatsCoreService:
             lambda: self._handle_dashen_profile_image(payload),
         )
 
+    async def handle_dashen_hero_treemap(self, payload: Dict[str, object]) -> Dict[str, object]:
+        return await self.dashen_request_queue.run(
+            "hero_treemap",
+            lambda: self._handle_dashen_hero_treemap(payload),
+        )
+
+    async def handle_dashen_hero_treemap_image(self, payload: Dict[str, object]) -> bytes:
+        return await self.dashen_request_queue.run(
+            "hero_treemap_image",
+            lambda: self._handle_dashen_hero_treemap_image(payload),
+        )
+
     async def _handle_dashen_profile(self, payload: Dict[str, object]) -> Dict[str, object]:
         bnet_id = str(payload.get("bnet_id") or payload.get("bnetId") or "").strip()
         customer_token = str(payload.get("customer_token") or payload.get("customerToken") or "").strip()
@@ -397,6 +439,22 @@ class OverstatsCoreService:
             )
         return result.image.content
 
+    async def _handle_dashen_hero_treemap(self, payload: Dict[str, object]) -> Dict[str, object]:
+        query = _build_dashen_hero_treemap_query(payload)
+        result = await dashen_hero_treemap_module.query_treemap(query, render=False)
+        return result.to_dict()
+
+    async def _handle_dashen_hero_treemap_image(self, payload: Dict[str, object]) -> bytes:
+        query = _build_dashen_hero_treemap_query(payload)
+        result = await dashen_hero_treemap_module.query_treemap(query, render=True)
+        if not result.image:
+            raise ModuleError(
+                error="render_failed",
+                message="Hero treemap image was not generated.",
+                status_code=500,
+            )
+        return result.image.content
+
     def handle_query(
         self,
         route: str,
@@ -483,6 +541,7 @@ class OverstatsCoreService:
             "/api/v2/dashen-rank-history/image": lambda: self.handle_dashen_rank_history_image(selection.payload),
             "/api/v2/dashen-quick-strength/image": lambda: self.handle_dashen_quick_strength_image(selection.payload),
             "/api/v2/dashen-competitive-strength/image": lambda: self.handle_dashen_competitive_strength_image(selection.payload),
+            "/api/v2/dashen-hero-treemap/image": lambda: self.handle_dashen_hero_treemap_image(selection.payload),
             "/api/v2/ow-hero-perk/image": lambda: self.handle_ow_hero_perk_image(selection.payload),
             "/api/v2/ow_hero_wiki/image": lambda: self.handle_ow_hero_wiki_image(selection.payload),
             "/api/v2/ow-hero-pick-rate/image": lambda: self.handle_ow_hero_pick_rate_image(selection.payload),
@@ -500,6 +559,7 @@ class OverstatsCoreService:
             "/api/v2/dashen-rank-history": lambda: self.handle_dashen_rank_history(selection.payload),
             "/api/v2/dashen-quick-strength": lambda: self.handle_dashen_quick_strength(selection.payload),
             "/api/v2/dashen-competitive-strength": lambda: self.handle_dashen_competitive_strength(selection.payload),
+            "/api/v2/dashen-hero-treemap": lambda: self.handle_dashen_hero_treemap(selection.payload),
             "/api/v2/ow-hero-perk": lambda: self.handle_ow_hero_perk(selection.payload),
             "/api/v2/ow_hero_wiki": lambda: self.handle_ow_hero_wiki(selection.payload),
             "/api/v2/ow-hero-pick-rate": lambda: self.handle_ow_hero_pick_rate(selection.payload),
@@ -1643,11 +1703,14 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
         f"max_concurrent={config.dashen_max_concurrent_requests} "
         f"max_accepted={config.dashen_max_accepted_requests}"
     )
+    print(f"[overstats] database writes enabled={config.enable_database_write}")
     async_runner = AsyncRunner()
-    request_metrics_recorder = RequestMetricsRecorder()
-    async_runner.run(request_metrics_recorder.start())
-    match_detail_recorder = MatchDetailRecorder()
-    async_runner.run(match_detail_recorder.start())
+    request_metrics_recorder = RequestMetricsRecorder() if config.enable_database_write else None
+    if request_metrics_recorder is not None:
+        async_runner.run(request_metrics_recorder.start())
+    match_detail_recorder = MatchDetailRecorder() if config.enable_database_write else None
+    if match_detail_recorder is not None:
+        async_runner.run(match_detail_recorder.start())
     ow_hero_leaderboard_sync_service = OWHeroLeaderboardSyncService()
     async_runner.run(ow_hero_leaderboard_sync_service.start())
     previous_match_detail_recorder = dashen_api_client.match_detail_recorder
@@ -1801,6 +1864,14 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
 
             if path == "/api/v2/dashen-profile":
                 self._handle_dashen_profile_post()
+                return
+
+            if path == "/api/v2/dashen-hero-treemap/image":
+                self._handle_dashen_hero_treemap_image_post()
+                return
+
+            if path == "/api/v2/dashen-hero-treemap":
+                self._handle_dashen_hero_treemap_post()
                 return
 
             if path == "/api/v2/dashen-rank-history/image":
@@ -3111,6 +3182,96 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
 
             self._send_binary(HTTPStatus.OK, image_body, "image/png")
 
+        def _handle_dashen_hero_treemap_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                result = async_runner.run(service.handle_dashen_hero_treemap(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_json(HTTPStatus.OK, result)
+
+        def _handle_dashen_hero_treemap_image_post(self) -> None:
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "ok": False,
+                        "error": "invalid_json",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            try:
+                image_body = async_runner.run(service.handle_dashen_hero_treemap_image(payload))
+            except ModuleError as exc:
+                self._send_json(
+                    HTTPStatus(exc.status_code),
+                    {
+                        "ok": False,
+                        "error": exc.error,
+                        "message": exc.message,
+                        "hint": exc.hint,
+                        "details": exc.details,
+                    },
+                )
+                return
+            except Exception as exc:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "ok": False,
+                        "error": "internal_error",
+                        "message": "Internal server error. See details.",
+                        "details": {
+                            "exception": type(exc).__name__,
+                            "message": str(exc),
+                        },
+                    },
+                )
+                return
+
+            self._send_binary(HTTPStatus.OK, image_body, "image/png")
+
         def _handle_dashen_rank_history_post(self) -> None:
             try:
                 payload = self._read_json_body()
@@ -3790,11 +3951,17 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
             return
 
         def _set_metrics_context(self, url: Optional[str]) -> None:
+            if not config.enable_database_write:
+                self._request_metrics_url = None
+                self._request_metrics_recorded = False
+                return
             normalized = normalize_request_metric_url(str(url or "").strip())
             self._request_metrics_url = normalized or None
             self._request_metrics_recorded = False
 
         def _record_module_metric(self, status: HTTPStatus, *, success: bool) -> None:
+            if not config.enable_database_write or request_metrics_recorder is None:
+                return
             metrics_url = getattr(self, "_request_metrics_url", None)
             if not metrics_url or getattr(self, "_request_metrics_recorded", False):
                 return
@@ -3907,8 +4074,10 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
         dashen_api_client.match_detail_recorder = previous_match_detail_recorder
         dashen_api_client.request_metrics_recorder = previous_request_metrics_recorder
         async_runner.run(ow_hero_leaderboard_sync_service.close())
-        async_runner.run(match_detail_recorder.close())
-        async_runner.run(request_metrics_recorder.close())
+        if match_detail_recorder is not None:
+            async_runner.run(match_detail_recorder.close())
+        if request_metrics_recorder is not None:
+            async_runner.run(request_metrics_recorder.close())
         async_runner.close()
         original_server_close()
 

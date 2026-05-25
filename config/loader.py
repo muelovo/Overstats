@@ -66,6 +66,7 @@ class APIConfig:
     host: str
     port: int
     use_stream_response: bool
+    enable_database_write: bool
     dashen_max_concurrent_requests: int
     dashen_max_accepted_requests: int = 4
 
@@ -138,6 +139,13 @@ def _default_dashen_max_accepted_requests() -> int:
     return max(1, len(raw_accounts) * 4)
 
 
+def is_database_write_enabled() -> bool:
+    return _read_bool_env(
+        "OVERSTATS_ENABLE_DATABASE_WRITE",
+        getattr(config, "ENABLE_DATABASE_WRITE", True),
+    )
+
+
 def get_api_config() -> APIConfig:
     return APIConfig(
         host=os.getenv("OVERSTATS_API_HOST", config.API_HOST),
@@ -146,6 +154,7 @@ def get_api_config() -> APIConfig:
             "OVERSTATS_USE_STREAM_RESPONSE",
             config.USE_STREAM_RESPONSE,
         ),
+        enable_database_write=is_database_write_enabled(),
         dashen_max_concurrent_requests=_read_int_env(
             "OVERSTATS_DASHEN_MAX_CONCURRENT_REQUESTS",
             getattr(config, "DASHEN_MAX_CONCURRENT_REQUESTS", 2),

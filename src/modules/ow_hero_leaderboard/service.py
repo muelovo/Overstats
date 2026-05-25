@@ -8,12 +8,14 @@ from typing import Callable, Dict, Optional
 from zoneinfo import ZoneInfo
 
 try:
+    from overstats.config import is_database_write_enabled
     from overstats.src.db import (
         HERO_LEADERBOARD_CN_TABLE,
         HERO_LEADERBOARD_GLOBAL_TABLE,
         OWHeroLeaderboardDB,
     )
 except ModuleNotFoundError:
+    from config import is_database_write_enabled
     from src.db import (
         HERO_LEADERBOARD_CN_TABLE,
         HERO_LEADERBOARD_GLOBAL_TABLE,
@@ -54,6 +56,8 @@ class OWHeroLeaderboardSyncService:
         self.last_results: Dict[str, OWHeroLeaderboardSyncResult] = {}
 
     async def start(self) -> None:
+        if not is_database_write_enabled():
+            return
         if self._task is not None and not self._task.done():
             return
         await asyncio.to_thread(self.db.initialize_database)
@@ -79,6 +83,16 @@ class OWHeroLeaderboardSyncService:
         return results
 
     async def sync_cn_once(self) -> OWHeroLeaderboardSyncResult:
+        if not is_database_write_enabled():
+            return OWHeroLeaderboardSyncResult(
+                region="cn",
+                status="skipped_db_write_disabled",
+                attempted_targets=0,
+                successful_targets=0,
+                failed_targets=0,
+                rows_written=0,
+                failures=(),
+            )
         targets = self.requests.build_cn_targets()
         rows = []
         failures = []

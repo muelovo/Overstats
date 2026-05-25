@@ -753,7 +753,7 @@ def _draw_leftover_billboards(
         draw.text((800, 1120 + y_index * 30), STR_LEFTOVER_OPEN, font=fonts["font_cn_small"], fill="#1c2238")
         y_index += 1
         for billboard in open_billboards:
-            _draw_leftover_billboard_chip(image, draw, config, 800 + x_index * 200, 1120 + y_index * 30, billboard, fonts, show_hero_name=True, highlight_rank=False)
+            _draw_leftover_billboard_chip(image, draw, config, 800 + x_index * 200, 1120 + y_index * 30, billboard, fonts, show_hero_name=False, highlight_rank=True)
             x_index += 1
             if x_index >= 4:
                 x_index = 0

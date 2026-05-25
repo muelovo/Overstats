@@ -116,6 +116,20 @@ def _safe_begin_ts(match: Dict[str, Any]) -> int:
         return 0
 
 
+def _card_data(payload: Dict[str, Any]) -> Dict[str, Any]:
+    data = payload.get("data") if isinstance(payload, dict) else None
+    return data if isinstance(data, dict) else {}
+
+
+def _has_usable_main_detail(detail_root: Dict[str, Any]) -> bool:
+    return bool(
+        detail_root.get("teammateList")
+        or detail_root.get("enemyList")
+        or detail_root.get("roundCountList")
+        or detail_root.get("totalCount")
+    )
+
+
 def _merge_unique_sorted_matches(
     existing_matches: Sequence[Dict[str, Any]],
     new_matches: Sequence[Dict[str, Any]],
@@ -341,8 +355,18 @@ class DashenSameplayModule:
             )
 
         player_details = await asyncio.gather(
-            self._build_focus_player_output(player1, source_match, render=render),
-            self._build_focus_player_output(player2, source_match, render=render),
+            self._build_focus_player_output(
+                player1,
+                source_match,
+                render=render,
+                prefetched_payload=detail.payload if source_player_index == 1 else None,
+            ),
+            self._build_focus_player_output(
+                player2,
+                source_match,
+                render=render,
+                prefetched_payload=detail.payload if source_player_index == 2 else None,
+            ),
         )
         notes = [item.note for item in player_details if item.note]
 
@@ -485,9 +509,29 @@ class DashenSameplayModule:
         return player1, player2
 
     async def _resolve_player(self, bnet_id: str, customer_token: str) -> ResolvedSameplayPlayer:
+        explicit_bnet_id = str(bnet_id or "").strip()
+        explicit_customer_token = str(customer_token or "").strip()
+        if explicit_customer_token:
+            card_payload: Dict[str, Any] = {}
+            try:
+                card_payload = await self.requests.api_client.query_card(explicit_customer_token)
+            except Exception:
+                card_payload = {}
+            card = _card_data(card_payload)
+            resolved_token = str(card.get("customerToken") or explicit_customer_token).strip() or explicit_customer_token
+            full_id = str(card.get("name") or explicit_bnet_id or "").strip()
+            resolved_bnet_id = str(card.get("bnetId") or "").strip()
+            token_label = f"token:{_token_preview(resolved_token)}"
+            return ResolvedSameplayPlayer(
+                query=explicit_bnet_id or full_id or token_label,
+                full_id=full_id or explicit_bnet_id or token_label,
+                bnet_id=resolved_bnet_id or explicit_bnet_id,
+                customer_token=resolved_token,
+            )
+
         query = DashenMatchQuery(
-            customer_token=str(customer_token or "").strip(),
-            bnet_id=str(bnet_id or "").strip(),
+            customer_token=explicit_customer_token,
+            bnet_id=explicit_bnet_id,
             include_fight=False,
             target_count=20,
         )
@@ -500,7 +544,6 @@ class DashenSameplayModule:
                 customer_token=resolved_query.customer_token,
             )
         token_label = f"token:{_token_preview(resolved_query.customer_token)}"
-        explicit_bnet_id = str(bnet_id or "").strip()
         return ResolvedSameplayPlayer(
             query=explicit_bnet_id or token_label,
             full_id=explicit_bnet_id or token_label,
@@ -520,6 +563,7 @@ class DashenSameplayModule:
         normalized_required = None if force_full_scan else max(1, int(required_count or 1))
         cache_key = json.dumps(
             {
+                "sameplay_cache_v": 2,
                 "player1_customer_token": player1.customer_token,
                 "player2_customer_token": player2.customer_token,
                 "include_previous_season": bool(include_previous_season),
@@ -688,7 +732,13 @@ class DashenSameplayModule:
     ) -> None:
         for match in new_items:
             match_id = str(match.get("matchId") or "").strip()
-            if not match_id or match_id in common_by_id or match_id not in player2_cursor.match_by_id:
+            # A sameplay entry is only valid after both players have seen the same match id.
+            if (
+                not match_id
+                or match_id in common_by_id
+                or match_id not in player1_cursor.match_by_id
+                or match_id not in player2_cursor.match_by_id
+            ):
                 continue
             source_match = player1_cursor.match_by_id.get(match_id) or player2_cursor.match_by_id.get(match_id) or dict(match)
             common_by_id[match_id] = dict(source_match)
@@ -777,10 +827,13 @@ class DashenSameplayModule:
         source_match: Dict[str, Any],
     ) -> tuple[Any, int]:
         failures: List[str] = []
+        match_id = str(source_match.get("matchId") or "").strip()
         for player_index, player in ((1, player1), (2, player2)):
             try:
-                detail = await self.requests.get_match_detail(player.customer_token, source_match)
-                return detail, player_index
+                detail = await self.match_module._get_match_detail_direct(player.customer_token, match_id)
+                if _has_usable_main_detail(_extract_match_detail_data(detail.payload)):
+                    return detail, player_index
+                failures.append(f"player{player_index}:invalid_detail")
             except Exception as exc:
                 failures.append(f"player{player_index}:{type(exc).__name__}:{exc}")
         raise ModuleError(
@@ -796,6 +849,7 @@ class DashenSameplayModule:
         source_match: Dict[str, Any],
         *,
         render: bool,
+        prefetched_payload: Optional[Dict[str, Any]] = None,
     ) -> DashenSameplayDetailPlayerOutput:
         match_id = str(source_match.get("matchId") or "").strip()
         if not match_id:
@@ -804,16 +858,20 @@ class DashenSameplayModule:
                 available=False,
                 note=f"Missing hero detail for {player.display_name}: matchId is unavailable.",
             )
-        try:
-            payload = await self.requests.api_client.query_match_info(player.customer_token, match_id)
-        except Exception as exc:
-            return DashenSameplayDetailPlayerOutput(
-                player=player,
-                available=False,
-                note=f"Failed to fetch hero detail for {player.display_name}: {type(exc).__name__}: {exc}",
-            )
-
+        payload = prefetched_payload if isinstance(prefetched_payload, dict) else {}
         detail_root = _extract_match_detail_data(payload)
+        if not detail_root.get("heroList"):
+            try:
+                detail = await self.match_module._get_match_detail_direct(player.customer_token, match_id)
+                payload = detail.payload if isinstance(detail.payload, dict) else {}
+                detail_root = _extract_match_detail_data(payload)
+            except Exception as exc:
+                return DashenSameplayDetailPlayerOutput(
+                    player=player,
+                    available=False,
+                    note=f"Failed to fetch hero detail for {player.display_name}: {type(exc).__name__}: {exc}",
+                )
+
         focus_player = self.match_module._find_focus_player(
             detail_root,
             query_full_id=player.full_id,

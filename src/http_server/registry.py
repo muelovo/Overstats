@@ -143,6 +143,32 @@ HTTP_UI_MODULE_SPECS: Tuple[HTTPUIModuleSpec, ...] = (
         ),
     ),
     HTTPUIModuleSpec(
+        id="dashen-hero-treemap",
+        title="英雄云图",
+        description="按英雄游玩时长生成胜率大盘云图，支持 JSON 或图片输出。",
+        json_endpoint="/api/v2/dashen-hero-treemap",
+        image_endpoint="/api/v2/dashen-hero-treemap/image",
+        fields=(
+            _number_field("season", "赛季", "season", placeholder="留空为当前赛季"),
+            _bool_field(
+                "include_previous_season",
+                "允许回退上赛季",
+                "include_previous_season",
+                default=True,
+            ),
+            _select_field(
+                "treemap_mode",
+                "数据模式",
+                "mode",
+                default="competitive",
+                options=(
+                    HTTPUIFieldOption("competitive", "竞技"),
+                    HTTPUIFieldOption("quick", "快速"),
+                ),
+            ),
+        ),
+    ),
+    HTTPUIModuleSpec(
         id="dashen-match",
         title="近期对局",
         description="查看近期对局列表，支持 JSON 或战绩图片。",

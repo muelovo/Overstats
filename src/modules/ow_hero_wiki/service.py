@@ -810,7 +810,7 @@ class OWHeroWikiModule:
 
 def _normalize_query_key(text: Any) -> str:
     normalized = str(text or "").strip().lower().replace("：", ":")
-    return re.sub(r"[^0-9a-z\u4e00-\u9fff]+", "", normalized)
+    return re.sub(r"[^0-9a-z一-鿿]+", "", normalized)
 
 
 def _normalize_role_key(text: Any) -> str:
@@ -892,7 +892,7 @@ def _contains_placeholder(text: Any) -> bool:
 
 
 def _contains_cjk(text: Any) -> bool:
-    return bool(re.search(r"[\u3400-\u9fff]", str(text or "")))
+    return bool(re.search(r"[㐀-鿿]", str(text or "")))
 
 
 def _needs_translation(text: Any) -> bool:

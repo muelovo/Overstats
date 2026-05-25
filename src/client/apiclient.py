@@ -16,26 +16,41 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, TYPE_CH
 import httpx
 
 try:
-    from overstats.config import DashenClientConfig, DashenCredentialConfig, get_dashen_client_config
+    from overstats.config import (
+        DashenClientConfig,
+        DashenCredentialConfig,
+        get_dashen_client_config,
+        is_database_write_enabled,
+    )
     from overstats.config import config as overstats_config
     from overstats.src.db.player_identity import record_identity_payload
     from overstats.src.db.request_metrics import normalize_request_metric_url
 except ModuleNotFoundError:
     try:
         from config import config as overstats_config
-        from config.loader import DashenClientConfig, DashenCredentialConfig, get_dashen_client_config
+        from config.loader import (
+            DashenClientConfig,
+            DashenCredentialConfig,
+            get_dashen_client_config,
+            is_database_write_enabled,
+        )
         from src.db.player_identity import record_identity_payload
         from src.db.request_metrics import normalize_request_metric_url
     except ModuleNotFoundError:
         overstats_config = None
         DashenClientConfig = Any  # type: ignore[misc,assignment]
         DashenCredentialConfig = Any  # type: ignore[misc,assignment]
+
         async def record_identity_payload(payload: Any, *, db: Any = None) -> int:
             return 0
+
         normalize_request_metric_url = lambda url: str(url or "").strip()  # type: ignore[assignment]
 
         def get_dashen_client_config() -> Any:
             raise RuntimeError("Dashen client config loader is unavailable.")
+
+        def is_database_write_enabled() -> bool:
+            return True
 
 if TYPE_CHECKING:
     try:
@@ -837,6 +852,8 @@ class DashenAPIClient:
         return self.credential_pool.next_credential()
 
     async def _record_upstream_metric(self, url: str, success: bool) -> None:
+        if not is_database_write_enabled():
+            return
         recorder = self.request_metrics_recorder
         if recorder is None:
             return
@@ -846,6 +863,8 @@ class DashenAPIClient:
             print(f"[overstats] failed to record upstream request metric url={url}: {exc}")
 
     async def _record_player_identity_payload(self, url: str, payload: Any) -> None:
+        if not is_database_write_enabled():
+            return
         try:
             host = (httpx.URL(url).host or "").lower()
         except Exception:
@@ -858,6 +877,8 @@ class DashenAPIClient:
             print(f"[overstats] failed to record player identity url={url}: {exc}")
 
     async def _record_match_detail_payload(self, url: str, payload: Any) -> None:
+        if not is_database_write_enabled():
+            return
         recorder = self.match_detail_recorder
         if recorder is None or not isinstance(payload, dict):
             return

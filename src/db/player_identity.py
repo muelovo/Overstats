@@ -5,8 +5,10 @@ import time
 from typing import Any, Dict, List, Optional
 
 try:
+    from overstats.config import is_database_write_enabled
     from overstats.src.db.match_stats import IDPoolDB, PLAYER_IDENTITY_TABLE
 except ModuleNotFoundError:
+    from config import is_database_write_enabled
     from src.db.match_stats import IDPoolDB, PLAYER_IDENTITY_TABLE
 
 
@@ -135,13 +137,15 @@ def extract_identity_records(payload: Any) -> List[Dict[str, Any]]:
 
 
 async def record_identity_records(records: List[Dict[str, Any]], *, db: Optional[IDPoolDB] = None) -> int:
-    if not records:
+    if not is_database_write_enabled() or not records:
         return 0
     identity_db = db or IDPoolDB()
     return await asyncio.to_thread(identity_db.upsert_player_identity_records, records)
 
 
 async def record_identity_payload(payload: Any, *, db: Optional[IDPoolDB] = None) -> int:
+    if not is_database_write_enabled():
+        return 0
     records = extract_identity_records(payload)
     if not records:
         return 0
