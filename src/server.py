@@ -14,6 +14,7 @@ try:
     from overstats.config import APIConfig
     from overstats.src.client.apiclient import dashen_api_client
     from overstats.src.db.match_detail_recorder import MatchDetailRecorder
+    from overstats.src.db.player_identity import PlayerIdentityRecorder
     from overstats.src.db.request_metrics import RequestMetricsRecorder, normalize_request_metric_url
     from overstats.src.modules.errors import ModuleError
     from overstats.src.modules.dashen_profile import DashenProfileQuery, dashen_profile_module
@@ -60,6 +61,7 @@ except ModuleNotFoundError:
     from config import APIConfig
     from src.client.apiclient import dashen_api_client
     from src.db.match_detail_recorder import MatchDetailRecorder
+    from src.db.player_identity import PlayerIdentityRecorder
     from src.db.request_metrics import RequestMetricsRecorder, normalize_request_metric_url
     from src.modules.errors import ModuleError
     from src.modules.dashen_profile import DashenProfileQuery, dashen_profile_module
@@ -1711,11 +1713,16 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
     match_detail_recorder = MatchDetailRecorder() if config.enable_database_write else None
     if match_detail_recorder is not None:
         async_runner.run(match_detail_recorder.start())
+    player_identity_recorder = PlayerIdentityRecorder() if config.enable_database_write else None
+    if player_identity_recorder is not None:
+        async_runner.run(player_identity_recorder.start())
     ow_hero_leaderboard_sync_service = OWHeroLeaderboardSyncService()
     async_runner.run(ow_hero_leaderboard_sync_service.start())
     previous_match_detail_recorder = dashen_api_client.match_detail_recorder
+    previous_player_identity_recorder = dashen_api_client.player_identity_recorder
     previous_request_metrics_recorder = dashen_api_client.request_metrics_recorder
     dashen_api_client.match_detail_recorder = match_detail_recorder
+    dashen_api_client.player_identity_recorder = player_identity_recorder
     dashen_api_client.request_metrics_recorder = request_metrics_recorder
 
     class OverstatsRequestHandler(BaseHTTPRequestHandler):
@@ -4072,8 +4079,11 @@ def create_server(config: APIConfig) -> ThreadingHTTPServer:
 
     def server_close() -> None:
         dashen_api_client.match_detail_recorder = previous_match_detail_recorder
+        dashen_api_client.player_identity_recorder = previous_player_identity_recorder
         dashen_api_client.request_metrics_recorder = previous_request_metrics_recorder
         async_runner.run(ow_hero_leaderboard_sync_service.close())
+        if player_identity_recorder is not None:
+            async_runner.run(player_identity_recorder.close())
         if match_detail_recorder is not None:
             async_runner.run(match_detail_recorder.close())
         if request_metrics_recorder is not None:

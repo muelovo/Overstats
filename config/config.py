@@ -52,7 +52,8 @@ OW_ESPORTS_API_KEY = ""
 
 # Optional external OW guess asset pack root.
 # 仅存放本地图片/音频等大资源，默认放在 Overstats 项目目录外的相邻文件夹。
-OW_GUESS_ASSET_ROOT = "../ow_guess_assets"
+# Default location: <repo>/ow_guess_assets (gitignored, optional install).
+OW_GUESS_ASSET_ROOT = "ow_guess_assets"
 
 # ======================= OW Hero Leaderboard ====================== #
 OW_HERO_LEADERBOARD_CN_SEASON = 2

@@ -406,6 +406,10 @@ pre {
   background: #fff;
 }
 
+.reply-audio {
+  width: 100%;
+}
+
 .reply-text {
   margin: 0;
   padding: 14px 16px;

@@ -28,7 +28,19 @@ except ModuleNotFoundError:
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CATALOG_ROOT = PROJECT_ROOT / "res" / "ow_guess"
-DEFAULT_ASSET_ROOT = (PROJECT_ROOT / str(getattr(app_config, "OW_GUESS_ASSET_ROOT", "../ow_guess_assets"))).resolve()
+DEFAULT_ASSET_ROOT_NAME = "ow_guess_assets"
+LEGACY_ASSET_ROOT_NAME = "../ow_guess_assets"
+DEFAULT_ASSET_ROOT_CANDIDATES = (
+    (PROJECT_ROOT / DEFAULT_ASSET_ROOT_NAME).resolve(),
+    (PROJECT_ROOT / LEGACY_ASSET_ROOT_NAME).resolve(),
+)
+DEFAULT_ASSET_ROOT_ALIASES = {
+    "",
+    DEFAULT_ASSET_ROOT_NAME,
+    f"./{DEFAULT_ASSET_ROOT_NAME}",
+    LEGACY_ASSET_ROOT_NAME,
+}
+DEFAULT_ASSET_ROOT_ALIAS_KEYS = {alias.lower() for alias in DEFAULT_ASSET_ROOT_ALIASES}
 REMOTE_IMAGE_TIMEOUT = httpx.Timeout(20.0, connect=8.0, read=20.0, write=20.0, pool=8.0)
 REMOTE_IMAGE_HEADERS = {
     "Accept": "image/*,*/*",
@@ -36,6 +48,31 @@ REMOTE_IMAGE_HEADERS = {
 }
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 REMOTE_QUERY_TOOL_TYPES = {"hero_icon", "map_image", "hero_silhouette"}
+
+
+def _normalize_asset_root_value(value: Any) -> str:
+    return str(value or "").strip().replace("\\", "/")
+
+
+def _pick_default_asset_root(candidates: Sequence[Path] | None = None) -> Path:
+    resolved_candidates = [Path(candidate).resolve() for candidate in (candidates or DEFAULT_ASSET_ROOT_CANDIDATES)]
+    for candidate in resolved_candidates:
+        if candidate.exists():
+            return candidate
+    return resolved_candidates[0]
+
+
+def _resolve_asset_root(value: Any) -> Path:
+    normalized = _normalize_asset_root_value(value)
+    if normalized.lower() in DEFAULT_ASSET_ROOT_ALIAS_KEYS:
+        return _pick_default_asset_root()
+    candidate = Path(normalized)
+    if candidate.is_absolute():
+        return candidate
+    return (PROJECT_ROOT / candidate).resolve()
+
+
+DEFAULT_ASSET_ROOT = _pick_default_asset_root()
 
 
 @dataclass(frozen=True)
@@ -219,8 +256,8 @@ class OWGuessCatalog:
         catalog_root: Path | str | None = None,
         random_source: random.Random | None = None,
     ) -> None:
-        configured_asset_root = str(resource_root or getattr(app_config, "OW_GUESS_ASSET_ROOT", "") or "").strip()
-        self.resource_root = self._resolve_runtime_path(configured_asset_root, DEFAULT_ASSET_ROOT)
+        configured_asset_root = resource_root if resource_root is not None else getattr(app_config, "OW_GUESS_ASSET_ROOT", "")
+        self.resource_root = _resolve_asset_root(configured_asset_root)
         self.catalog_root = Path(catalog_root or DEFAULT_CATALOG_ROOT)
         self.random = random_source or random.Random()
         self._entries_cache: Dict[str, List[Dict[str, Any]]] = {}
@@ -693,14 +730,6 @@ class OWGuessCatalog:
     def _resolve_asset_path(self, *parts: str) -> Path:
         clean_parts = [str(part).strip() for part in parts if str(part).strip()]
         return self.resource_root.joinpath(*clean_parts)
-
-    def _resolve_runtime_path(self, raw_value: str, default_path: Path) -> Path:
-        if not raw_value:
-            return default_path
-        candidate = Path(raw_value)
-        if candidate.is_absolute():
-            return candidate
-        return (PROJECT_ROOT / candidate).resolve()
 
     async def _cache_remote_asset(self, url: str, type_slug: str) -> Path:
         normalized = str(url or "").strip()

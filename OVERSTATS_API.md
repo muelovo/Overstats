@@ -211,6 +211,7 @@ Behavior notes:
 - `map_music` and `hero_description` recommend `60` seconds; other supported types recommend `30` seconds.
 - `hero_icon`, `map_image`, and `hero_silhouette` rebuild their remote image candidate lists from `res/query_tool.json` on every service startup.
 - Local-only assets such as map music, ult voice, hero icon packs, and silhouette backgrounds are read from the optional external asset pack root configured by `OW_GUESS_ASSET_ROOT`.
+- The default optional install location is `<repo>/ow_guess_assets/`; the legacy sibling path `../ow_guess_assets` is still accepted for compatibility.
 - If the optional asset pack is not installed, local-asset-dependent question types return `ow_guess_type_unavailable`.
 - Remote image caches are also written under the external OW guess asset root instead of inside the main project tree.
 

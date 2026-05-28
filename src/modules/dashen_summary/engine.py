@@ -455,7 +455,7 @@ async def _build_image_base64(
     detail_pairs, quick_dist_data = await asyncio.gather(detail_task, quick_dist_task)
     timer.mark(
         "DETAIL_AND_QUICK_DIST_DONE",
-        f"detail_count={len(detail_pairs)}; quick_dist_points={len(quick_dist_data or []) if isinstance(quick_dist_data, list) else 0}",
+        f"detail_count={len(detail_pairs)}; quick_dist_points={len((quick_dist_data or {}).get('sampled_matches') or [])}",
     )
     stats = runtime.summary._build_stats(matches, detail_pairs, resolved_target)
     timer.mark("STATS_DONE")

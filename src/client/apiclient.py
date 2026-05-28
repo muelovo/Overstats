@@ -55,9 +55,11 @@ except ModuleNotFoundError:
 if TYPE_CHECKING:
     try:
         from overstats.src.db.match_detail_recorder import MatchDetailRecorder
+        from overstats.src.db.player_identity import PlayerIdentityRecorder
         from overstats.src.db.request_metrics import RequestMetricsRecorder
     except ModuleNotFoundError:
         from src.db.match_detail_recorder import MatchDetailRecorder
+        from src.db.player_identity import PlayerIdentityRecorder
         from src.db.request_metrics import RequestMetricsRecorder
 
 
@@ -812,6 +814,7 @@ class DashenAPIClient:
         client_config: Optional[DashenClientConfig] = None,
         credential_pool: Optional[DashenCredentialPool] = None,
         match_detail_recorder: Optional["MatchDetailRecorder"] = None,
+        player_identity_recorder: Optional["PlayerIdentityRecorder"] = None,
         request_metrics_recorder: Optional["RequestMetricsRecorder"] = None,
         dts: Optional[int] = None,
         role_id: Optional[int] = None,
@@ -820,6 +823,7 @@ class DashenAPIClient:
     ) -> None:
         self.client_config = client_config or CLIENT_CONFIG
         self.match_detail_recorder = match_detail_recorder
+        self.player_identity_recorder = player_identity_recorder
         self.request_metrics_recorder = request_metrics_recorder
         self.netease_client = netease_client or _build_default_netease_client()
         self.proxy_client = proxy_client or SafeClient(
@@ -870,6 +874,13 @@ class DashenAPIClient:
         except Exception:
             host = ""
         if host != DATAMSAPI_HOST:
+            return
+        recorder = self.player_identity_recorder
+        if recorder is not None:
+            try:
+                await recorder.enqueue(payload)
+            except Exception as exc:
+                print(f"[overstats] failed to enqueue player identity url={url}: {exc}")
             return
         try:
             await record_identity_payload(payload)

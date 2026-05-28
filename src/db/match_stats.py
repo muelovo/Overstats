@@ -262,6 +262,24 @@ class IDPoolDB:
                 except Exception:
                     pass
 
+    def initialize_player_identity_schema(self) -> bool:
+        with self._write_lock:
+            conn = self._get_write_connection()
+            if conn is None:
+                return False
+            try:
+                self._initialize_player_identity_table(conn)
+                conn.commit()
+                return True
+            except Exception as exc:
+                self._warn_once(f"match stats sqlite initialize player identity schema failed: {type(exc).__name__}: {exc}")
+                return False
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
     @staticmethod
     def _escape_like_pattern(text: str) -> str:
         return str(text or "").replace("!", "!!").replace("%", "!%").replace("_", "!_")

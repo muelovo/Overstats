@@ -7,6 +7,12 @@
 
   const MATCH_DETAIL_MODULE_ID = "dashen-match-detail";
   const SAMEPLAY_DETAIL_MODULE_ID = "dashen-sameplay-detail";
+  const OW_GUESS_MODULE_ID = "ow-guess";
+  const REPLY_BUNDLE_MODULE_IDS = new Set([
+    MATCH_DETAIL_MODULE_ID,
+    SAMEPLAY_DETAIL_MODULE_ID,
+    OW_GUESS_MODULE_ID,
+  ]);
 
   const state = {
     activeModuleId: bootstrap.default_module_id || (modules[0] && modules[0].id) || "",
@@ -46,9 +52,7 @@
   }
 
   function isReplyBundleModule(module) {
-    return Boolean(
-      module && (module.id === MATCH_DETAIL_MODULE_ID || module.id === SAMEPLAY_DETAIL_MODULE_ID)
-    );
+    return Boolean(module && REPLY_BUNDLE_MODULE_IDS.has(module.id));
   }
 
   function getEffectiveEndpoint(module) {
@@ -58,7 +62,10 @@
     if (isReplyBundleModule(module)) {
       return module.json_endpoint;
     }
-    return state.mode === "image" ? module.image_endpoint : module.json_endpoint;
+    if (state.mode === "image" && module.image_endpoint) {
+      return module.image_endpoint;
+    }
+    return module.json_endpoint;
   }
 
   function formatJson(value) {
@@ -111,7 +118,7 @@
     elements.replyPreview.innerHTML = "";
     elements.replyPreview.classList.add("hidden");
     elements.replyPlaceholder.classList.remove("hidden");
-    setReplyMeta("Available for reply bundle modules");
+    setReplyMeta("Available for OW guess and other reply bundle modules");
   }
 
   function showImagePreview(blob) {
@@ -170,11 +177,15 @@
     }
   }
 
-  function getReplyTitle(reply, imageIndex, imageTotal, textIndex) {
+  function getReplyTitle(reply, module, imageIndex, imageTotal, textIndex, audioIndex) {
     if (!reply || typeof reply !== "object") {
       return "Reply";
     }
+    const isOWGuessModule = Boolean(module && module.id === OW_GUESS_MODULE_ID);
     if (reply.type === "image") {
+      if (isOWGuessModule) {
+        return imageIndex === 0 ? "Question Image" : "Extra Image " + (imageIndex + 1);
+      }
       if (imageIndex === 0) {
         return "Main Panel";
       }
@@ -190,7 +201,16 @@
       return "Extra Image " + (imageIndex + 1);
     }
     if (reply.type === "text") {
+      if (isOWGuessModule) {
+        return textIndex === 0 ? "Question Prompt" : "Extra Prompt " + (textIndex + 1);
+      }
       return textIndex === 0 ? "Text Note" : "Extra Note " + (textIndex + 1);
+    }
+    if (reply.type === "audio") {
+      if (isOWGuessModule) {
+        return audioIndex === 0 ? "Question Audio" : "Extra Audio " + (audioIndex + 1);
+      }
+      return audioIndex === 0 ? "Audio Reply" : "Extra Audio " + (audioIndex + 1);
     }
     if (reply.type === "meta") {
       return "Context";
@@ -204,7 +224,10 @@
       return;
     }
 
-    const displayReplies = replies.filter((reply) => reply && (reply.type === "image" || reply.type === "text"));
+    const activeModule = getActiveModule();
+    const displayReplies = replies.filter(
+      (reply) => reply && (reply.type === "image" || reply.type === "text" || reply.type === "audio")
+    );
     const imageReplies = displayReplies.filter((reply) => reply.type === "image");
     if (!displayReplies.length) {
       setReplyMeta("Replies were returned, but nothing displayable was found.");
@@ -213,6 +236,7 @@
 
     let imageIndex = 0;
     let textIndex = 0;
+    let audioIndex = 0;
 
     displayReplies.forEach((reply) => {
       const card = document.createElement("article");
@@ -223,12 +247,18 @@
 
       const title = document.createElement("strong");
       title.className = "reply-item-title";
-      title.textContent = getReplyTitle(reply, imageIndex, imageReplies.length, textIndex);
+      title.textContent = getReplyTitle(reply, activeModule, imageIndex, imageReplies.length, textIndex, audioIndex);
       head.appendChild(title);
 
       const badge = document.createElement("span");
       badge.className = "reply-item-badge";
-      badge.textContent = reply.type === "image" ? (reply.media_type || "image") : "text";
+      if (reply.type === "image") {
+        badge.textContent = reply.media_type || "image";
+      } else if (reply.type === "audio") {
+        badge.textContent = reply.media_type || "audio";
+      } else {
+        badge.textContent = "text";
+      }
       head.appendChild(badge);
 
       card.appendChild(head);
@@ -257,6 +287,25 @@
         text.textContent = String(reply.data || "");
         card.appendChild(text);
         textIndex += 1;
+      } else if (reply.type === "audio") {
+        try {
+          const blob = base64ToBlob(reply.base64, reply.media_type);
+          const audioUrl = URL.createObjectURL(blob);
+          state.replyObjectUrls.push(audioUrl);
+
+          const audio = document.createElement("audio");
+          audio.className = "reply-audio";
+          audio.controls = true;
+          audio.preload = "metadata";
+          audio.src = audioUrl;
+          card.appendChild(audio);
+        } catch (error) {
+          const failure = document.createElement("pre");
+          failure.className = "reply-text";
+          failure.textContent = "Failed to decode audio reply: " + String(error && error.message ? error.message : error);
+          card.appendChild(failure);
+        }
+        audioIndex += 1;
       }
 
       elements.replyPreview.appendChild(card);

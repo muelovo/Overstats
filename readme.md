@@ -79,7 +79,7 @@ DASHEN_MAX_ACCEPTED_REQUESTS = max(len(DASHEN_ACCOUNTS) * 4, 1)
 - `DASHEN_DTS` 与 `DASHEN_SERVER` 对所有账号共享
 - 服务会在多个账号之间轮转请求，失败账号会进入临时冷却
 - `API_HOST`、`API_PORT`、`USE_STREAM_RESPONSE` 用于控制本地服务行为
-- `OW_GUESS_ASSET_ROOT` 用于指定 `ow_guess` 的可选外置资源包目录。未安装该资源包时，依赖本地图片/音频的题型会自动不可用
+- `OW_GUESS_ASSET_ROOT` 用于指定 `ow_guess` 的可选外置资源包目录。默认位置为仓库内的 `ow_guess_assets/`（建议保持 git ignore，按需选装）；未安装该资源包时，依赖本地图片/音频的题型会自动不可用
 - `PATCH_NOTES_USE_INTERNATIONAL_PROXY` 与 `PATCH_NOTES_INTERNATIONAL_PROXY` 用于控制外服补丁页面与外服静态资源是否走代理
 - 外服补丁翻译复用 `ANALYSIS_BASE_URL`、`ANALYSIS_API_KEY` 和对应模型配置，不再单独维护补丁翻译 key
 
