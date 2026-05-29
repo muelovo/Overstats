@@ -5,7 +5,7 @@ from collections.abc import Awaitable
 from dataclasses import dataclass, field
 import datetime as dt
 from typing import Callable, Dict, Optional
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 try:
     from overstats.config import is_database_write_enabled
@@ -25,7 +25,15 @@ except ModuleNotFoundError:
 from .requests import OWHeroLeaderboardRequests
 
 
-BEIJING_TIMEZONE = ZoneInfo("Asia/Shanghai")
+def _load_beijing_timezone() -> dt.tzinfo:
+    try:
+        return ZoneInfo("Asia/Shanghai")
+    except ZoneInfoNotFoundError:
+        # Fall back to a fixed UTC+8 timezone when IANA tz data is unavailable.
+        return dt.timezone(dt.timedelta(hours=8), name="Asia/Shanghai")
+
+
+BEIJING_TIMEZONE = _load_beijing_timezone()
 
 
 @dataclass(frozen=True)

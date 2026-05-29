@@ -33,3 +33,4 @@ test_report_*.md
 api_test_data.json
 /test/*
 !/test/test_ow_guess_catalog.py
+!/test/test_ow_hero_leaderboard_service.py
