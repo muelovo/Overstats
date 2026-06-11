@@ -6,6 +6,7 @@
   const moduleMap = new Map(modules.map((item) => [item.id, item]));
 
   const MODULE_TODAY = "dashen-summary-today";
+  const MODULE_PROFILE = "dashen-profile";
   const MODULE_QUICK = "dashen-quick-strength";
   const MODULE_MATCH = "dashen-match-detail";
 
@@ -35,6 +36,7 @@
     
     // Main tiles
     tileToday: document.getElementById("tileToday"),
+    tileProfile: document.getElementById("tileProfile"),
     tileQuick: document.getElementById("tileQuick"),
     tileMatch: document.getElementById("tileMatch"),
     
@@ -404,6 +406,7 @@
     
     // Update active UI classes
     elements.tileToday.classList.toggle("is-active", moduleId === MODULE_TODAY);
+    elements.tileProfile.classList.toggle("is-active", moduleId === MODULE_PROFILE);
     elements.tileQuick.classList.toggle("is-active", moduleId === MODULE_QUICK);
     elements.tileMatch.classList.toggle("is-active", moduleId === MODULE_MATCH);
 
@@ -759,10 +762,20 @@
     }
   }
 
+  const CORE_MODULE_IDS = new Set([
+    MODULE_TODAY,
+    MODULE_PROFILE,
+    MODULE_QUICK,
+    MODULE_MATCH
+  ]);
+
   // --- Collapsible More features list rendering ---
   function renderModuleNav() {
     elements.moduleNav.innerHTML = "";
     modules.forEach((item) => {
+      // Exclude core modules from the "More features" nav
+      if (CORE_MODULE_IDS.has(item.id)) return;
+
       const button = document.createElement("button");
       button.type = "button";
       button.className = "module-button" + (item.id === state.activeModuleId ? " is-active" : "");
@@ -888,6 +901,7 @@
     elements.savePlayerButton.addEventListener("click", handleSavePlayer);
 
     elements.tileToday.addEventListener("click", () => setActiveFeature(MODULE_TODAY));
+    elements.tileProfile.addEventListener("click", () => setActiveFeature(MODULE_PROFILE));
     elements.tileQuick.addEventListener("click", () => setActiveFeature(MODULE_QUICK));
     elements.tileMatch.addEventListener("click", () => setActiveFeature(MODULE_MATCH));
 
