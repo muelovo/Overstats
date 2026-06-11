@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  overstats:
+    build: .
+    image: overstats:latest
+    container_name: overstats-service
+    ports:
+      - "18080:18080"
+    volumes:
+      # 挂载配置文件以防敏感凭证打包进镜像，且支持热修改
+      - ./config:/app/config
+      # 挂载缓存与静态资源缓存目录
+      - ./cache:/app/cache
+      # 挂载 SQLite 请求统计与玩家识别数据库
+      - ./src/db:/app/src/db
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1

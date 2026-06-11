@@ -47,6 +47,22 @@ def resolve_http_ui_asset(path: str) -> Optional[HTTPUIAssetResponse]:
             content_type="application/javascript; charset=utf-8",
             body=_read_binary_asset("app.js"),
         )
+    if normalized.startswith("/ui/") and any(normalized.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp")):
+        filename = normalized.split("/")[-1]
+        filepath = ASSET_DIR / filename
+        if filepath.exists() and filepath.is_file():
+            ext = filepath.suffix.lower()
+            if ext == ".png":
+                content_type = "image/png"
+            elif ext == ".webp":
+                content_type = "image/webp"
+            else:
+                content_type = "image/jpeg"
+            return HTTPUIAssetResponse(
+                status=HTTPStatus.OK,
+                content_type=content_type,
+                body=filepath.read_bytes(),
+            )
     if normalized == "/ui/healthz":
         payload = {
             "ok": True,

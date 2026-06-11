@@ -841,6 +841,28 @@ class OverstatsCoreService:
             render=render,
         )
         resolved = result.resolved_bnet
+        matches_list = result.matches
+        try:
+            from overstats.src.modules.dashen_match.render import _load_ow_config, _find_map, _find_hero
+        except ModuleNotFoundError:
+            from src.modules.dashen_match.render import _load_ow_config, _find_map, _find_hero
+        try:
+            config = _load_ow_config()
+            for m in matches_list:
+                map_guid = m.get("mapGuid")
+                if map_guid:
+                    map_info = _find_map(config, map_guid)
+                    if map_info and map_info.get("name"):
+                        m["mapName"] = map_info.get("name")
+                
+                hero_guid = m.get("heroGuid")
+                if hero_guid:
+                    hero_info = _find_hero(config, hero_guid)
+                    if hero_info and hero_info.get("name"):
+                        m["heroName"] = hero_info.get("name")
+        except Exception as e:
+            print(f"[overstats-web] failed to enrich matches: {e}")
+
         return {
             "ok": True,
             "customer_token": result.customer_token,
@@ -850,8 +872,8 @@ class OverstatsCoreService:
                 "bnet_id": resolved.bnet_id,
                 "has_customer_token": bool(resolved.customer_token),
             } if resolved else None,
-            "count": len(result.matches),
-            "matches": result.matches,
+            "count": len(matches_list),
+            "matches": matches_list,
         }
 
     async def _handle_dashen_match_replies(self, payload: Dict[str, object]) -> Dict[str, object]:

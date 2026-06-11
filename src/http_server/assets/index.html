@@ -3,126 +3,210 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Overstats 控制面板</title>
+    <title>Overstats 战绩卡片生成器</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/ui/app.css" />
   </head>
   <body>
+    <!-- 自定义背景容器 -->
+    <div id="customBgOverlay" class="custom-bg-overlay"></div>
+    <div id="customBgBlur" class="custom-bg-blur"></div>
+
+    <!-- 移动端视图切换 Tabs -->
+    <div class="mobile-tabs-header">
+      <button id="tabConfigBtn" class="mobile-tab-btn is-active" type="button">📝 配置参数</button>
+      <button id="tabPreviewBtn" class="mobile-tab-btn" type="button">🖼️ 战绩预览</button>
+    </div>
+
     <div class="app-shell">
+      <!-- 左侧：战绩参数控制区 -->
       <aside class="sidebar">
         <div class="sidebar-head">
-          <p class="eyebrow">Overstats</p>
-          <h1>网页控制面板</h1>
-          <p class="sidebar-copy">请先在左侧选择模块，然后在右侧查看 JSON、图片以及比赛详情回复包。</p>
+          <p class="eyebrow">Overstats Studio</p>
+          <h1>战绩卡片生成器</h1>
+          <p class="sidebar-copy">输入玩家 ID，一键生成精美的守望先锋战绩分享图。</p>
+
+          <!-- 主题与背景设置 -->
+          <div class="theme-bg-controls">
+            <div class="control-item">
+              <label for="themeSelect">🎨 主题</label>
+              <select id="themeSelect" class="theme-select">
+                <option value="neon">霓虹脉冲</option>
+                <option value="rabbit" selected>天外飞兔</option>
+                <option value="hope">希望之心</option>
+              </select>
+            </div>
+            <div class="control-item">
+              <!-- 背景图切换控制按钮（仅当后台存在背景图时由 JS 动态显示） -->
+              <button id="clearBgButton" class="clear-bg-button hidden" type="button" title="切换同人背景图显示">🌌 开启背景</button>
+            </div>
+          </div>
         </div>
-        <nav id="moduleNav" class="module-nav" aria-label="模块列表"></nav>
+
+
+        <form id="requestForm" class="request-form">
+          <!-- 玩家 ID 输入与收藏 -->
+          <div class="field-block">
+            <span class="field-title">玩家目标 (BattleTag / 大神 ID)</span>
+            <div class="target-input-wrapper">
+              <input
+                id="targetValueInput"
+                name="target_value"
+                type="text"
+                placeholder="示例：Player#12345"
+                autocomplete="off"
+              />
+              <button id="savePlayerButton" class="save-player-button" type="button" title="收藏常用玩家">♥ 收藏</button>
+            </div>
+            <div id="quickPlayersList" class="quick-players-list"></div>
+          </div>
+
+          <!-- 核心三大功能大磁贴 -->
+          <div class="field-block">
+            <span class="field-title">功能选择</span>
+            <div class="feature-tile-grid">
+              <button id="tileToday" type="button" class="feature-tile is-active">
+                <span class="tile-icon">☀️</span>
+                <strong>今日总结</strong>
+              </button>
+              <button id="tileQuick" type="button" class="feature-tile">
+                <span class="tile-icon">⚡</span>
+                <strong>快速强度</strong>
+              </button>
+              <button id="tileMatch" type="button" class="feature-tile">
+                <span class="tile-icon">⚔️</span>
+                <strong>对局详情</strong>
+              </button>
+            </div>
+          </div>
+
+          <!-- 动态极简参数配置区 -->
+          <div id="simpleParamsPanel" class="simple-params-panel">
+            <!-- 查询单场详情板块 -->
+            <div id="singleMatchDetailPanel" class="field hidden">
+              <span>查询单场详情</span>
+              <div class="single-match-row">
+                <select id="singleMatchIndexSelect">
+                  <option value="1">第 1 局</option>
+                  <option value="2">第 2 局</option>
+                  <option value="3">第 3 局</option>
+                  <option value="4">第 4 局</option>
+                  <option value="5">第 5 局</option>
+                  <option value="6">第 6 局</option>
+                  <option value="7">第 7 局</option>
+                  <option value="8">第 8 局</option>
+                  <option value="9">第 9 局</option>
+                  <option value="10">第 10 局</option>
+                  <option value="11">第 11 局</option>
+                  <option value="12">第 12 局</option>
+                  <option value="13">第 13 局</option>
+                  <option value="14">第 14 局</option>
+                  <option value="15">第 15 局</option>
+                  <option value="16">第 16 局</option>
+                  <option value="17">第 17 局</option>
+                  <option value="18">第 18 局</option>
+                  <option value="19">第 19 局</option>
+                  <option value="20">第 20 局</option>
+                </select>
+                <button id="queryDetailButton" class="secondary-query-button" type="button">查询该局详情</button>
+              </div>
+              <button id="backToOverviewButton" class="back-link-button hidden" type="button">← 返回对局列表图</button>
+            </div>
+          </div>
+
+          <!-- 高级配置折叠区 -->
+          <details class="advanced-settings-card">
+            <summary class="advanced-summary">高级设置 (Advanced)</summary>
+            <div id="dynamicFields" class="field-grid"></div>
+          </details>
+
+          <!-- 更多功能折叠区 -->
+          <details class="more-features-card">
+            <summary class="more-features-summary">展开更多战绩功能...</summary>
+            <nav id="moduleNav" class="module-nav" aria-label="备用模块列表"></nav>
+          </details>
+
+          <!-- 提交与状态 -->
+          <div class="actions">
+            <button id="submitButton" class="primary-button" type="submit">生成战绩卡片</button>
+            <span id="requestStatus" class="request-status">就绪</span>
+          </div>
+        </form>
       </aside>
 
+      <!-- 右侧：高清大图卡片预览区 -->
       <main class="workspace">
         <section class="hero-panel">
           <div>
-            <p class="eyebrow">当前模块</p>
-            <h2 id="moduleTitle">加载中</h2>
-            <p id="moduleDescription" class="module-description"></p>
+            <p class="eyebrow">当前状态</p>
+            <h2 id="moduleTitle">今日总结</h2>
+            <p id="moduleDescription" class="module-description">生成今日总结分享卡片。</p>
           </div>
           <div class="endpoint-card">
-            <span class="endpoint-label">接口地址</span>
-            <code id="activeEndpoint">/api/v2/...</code>
+            <span class="endpoint-label">后端路由</span>
+            <code id="activeEndpoint">/api/v2/dashen-summary/today/image</code>
           </div>
         </section>
 
-        <section class="grid">
-          <div class="panel request-panel">
-            <div class="panel-head">
-              <h3>请求表单</h3>
-              <button id="resetJsonButton" class="ghost-button" type="button">根据表单重置 JSON</button>
-            </div>
-
-            <form id="requestForm" class="request-form">
-              <div class="field-grid">
-                <label class="field">
-                  <span>响应模式</span>
-                  <select id="modeSelect" name="mode">
-                    <option value="json">JSON</option>
-                    <option value="image">图片</option>
-                  </select>
-                </label>
-
-                <label id="targetTypeField" class="field">
-                  <span>目标类型</span>
-                  <select id="targetTypeSelect" name="target_type">
-                    <option value="bnet_id">bnet_id</option>
-                    <option value="customer_token">customer_token</option>
-                  </select>
-                </label>
-
-                <label id="targetValueField" class="field field-span-2">
-                  <span>目标值</span>
-                  <input
-                    id="targetValueInput"
-                    name="target_value"
-                    type="text"
-                    placeholder="示例：Player#12345"
-                    autocomplete="off"
-                  />
-                </label>
-              </div>
-
-              <div id="dynamicFields" class="field-grid"></div>
-
-              <label class="field field-block">
-                <span>原始 JSON 覆盖</span>
-                <textarea
-                  id="payloadEditor"
-                  name="payload_editor"
-                  rows="14"
-                  spellcheck="false"
-                ></textarea>
-              </label>
-
-              <div class="actions">
-                <button id="submitButton" class="primary-button" type="submit">发送请求</button>
-                <span id="requestStatus" class="request-status">等待发送请求</span>
-              </div>
-            </form>
+        <!-- 纯粹的图片预览，支持多图垂直平铺 -->
+        <section class="preview-panel">
+          <div id="imagePlaceholder" class="image-placeholder">
+            <span class="placeholder-icon">🌌</span>
+            <p>输入 ID 并点击生成按钮，高清战绩图片将在这里展示。</p>
+            <p class="sub-placeholder">对局详情将生成“对局主面板、数据详情、AI 总结”三张卡片。点击可进行大图缩放与下载。</p>
           </div>
 
-          <div class="panel preview-panel">
-            <div class="panel-head">
-              <h3>结果预览</h3>
-              <span id="responseMeta" class="response-meta">暂未发送请求</span>
+          <!-- 手机端专用：对局详情选择器（移到预览区上方） -->
+          <div id="mobileSingleMatchPanel" class="mobile-single-match-panel hidden">
+            <span>查询单场详情</span>
+            <div class="single-match-row">
+              <select id="mobileMatchIndexSelect">
+                <option value="1">第 1 局</option>
+                <option value="2">第 2 局</option>
+                <option value="3">第 3 局</option>
+                <option value="4">第 4 局</option>
+                <option value="5">第 5 局</option>
+                <option value="6">第 6 局</option>
+                <option value="7">第 7 局</option>
+                <option value="8">第 8 局</option>
+                <option value="9">第 9 局</option>
+                <option value="10">第 10 局</option>
+                <option value="11">第 11 局</option>
+                <option value="12">第 12 局</option>
+                <option value="13">第 13 局</option>
+                <option value="14">第 14 局</option>
+                <option value="15">第 15 局</option>
+                <option value="16">第 16 局</option>
+                <option value="17">第 17 局</option>
+                <option value="18">第 18 局</option>
+                <option value="19">第 19 局</option>
+                <option value="20">第 20 局</option>
+              </select>
+              <button id="mobileQueryDetailButton" class="secondary-query-button" type="button">查询该局详情</button>
             </div>
-
-            <div class="preview-stack">
-              <section class="preview-card">
-                <div class="preview-head">
-                  <h4>JSON 预览</h4>
-                </div>
-                <pre id="jsonPreview" class="preview-code">{
-  "hint": "请选择模块并发送请求"
-}</pre>
-              </section>
-
-              <section class="preview-card">
-                <div class="preview-head">
-                  <h4>图片预览</h4>
-                </div>
-                <div id="imagePlaceholder" class="image-placeholder">图片响应会显示在这里。</div>
-                <img id="imagePreview" class="image-preview hidden" alt="API 图片预览" />
-              </section>
-
-              <section class="preview-card">
-                <div class="preview-head">
-                  <h4>回复预览</h4>
-                  <span id="replyMeta" class="response-meta">适用于 OW 猜一猜和其他 replies 接口</span>
-                </div>
-                <div id="replyPlaceholder" class="image-placeholder">当 JSON 响应包含 replies 内容时，文字、图片或音频题面，以及详情面板等回复内容会显示在这里。</div>
-                <div id="replyPreview" class="reply-preview hidden"></div>
-              </section>
-            </div>
+            <button id="mobileBackToOverviewButton" class="back-link-button hidden" type="button">← 返回对局列表图</button>
           </div>
+
+          <!-- 3 张大图的滚动容器 -->
+          <div id="imagePreviewStack" class="image-preview-stack hidden"></div>
         </section>
       </main>
     </div>
+
+    <!-- 灯箱大图弹窗 (Lightbox) -->
+    <div id="lightbox" class="lightbox-overlay hidden">
+      <button id="lightboxClose" class="lightbox-close" type="button" title="关闭">&times;</button>
+      <div class="lightbox-container">
+        <img id="lightboxImage" class="lightbox-content" src="" alt="战绩卡片大图" />
+      </div>
+      <div class="lightbox-footer">
+        <a id="lightboxDownload" class="lightbox-btn download-btn" href="#" download="overstats_card.png">📥 下载图片</a>
+        <p class="lightbox-tip" style="display: none; margin: 8px 0 0; font-size: 0.8rem; color: var(--muted); text-align: center;">提示：在微信/QQ 中可长按图片保存到相册</p>
+      </div>
+    </div>
+
 
     __OVERSTATS_UI_BOOTSTRAP__
     <script src="/ui/app.js"></script>

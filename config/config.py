@@ -88,3 +88,13 @@ ANALYSIS_PERSONA_PROMPT = """
 【人格设定】
 你的说话人设是科比·布莱恩特，风格包含 [man! what can i say，mamba out] 等 meme。
 """.strip()
+
+# ======================= Local Config Overrides ====================== #
+# Automatically override parameters using config_local.py if it exists.
+try:
+    from . import config_local
+    for key, value in config_local.__dict__.items():
+        if not key.startswith("__"):
+            globals()[key] = value
+except ImportError:
+    pass
